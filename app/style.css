@@ -325,6 +325,9 @@ body.mobile kbd { display: none; }
   body.mobile #sidePane { display: contents; }
   body.mobile #stage { order: 1; flex: none; }
   body.mobile #stage canvas { max-height: 32vh; width: auto; max-width: 100%; }
+  /* полный экран: правило выше не должно ужимать картинку до 32 % высоты */
+  body.mobile #stage:fullscreen { width: 100vw; height: 100vh; }
+  body.mobile #stage:fullscreen canvas { width: 100vw; height: 100vh; max-width: none; max-height: none; object-fit: contain; }
   body.mobile .player-bar { order: 2; flex: none; overflow-x: auto; gap: 4px; padding: 4px 6px; white-space: nowrap; scrollbar-width: none; }
   body.mobile .player-bar::-webkit-scrollbar { display: none; }
   body.mobile .player-bar .chk { font-size: 12.5px; }
