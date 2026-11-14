@@ -107,6 +107,7 @@ window.api = {
   launchFile: async () => { await ready; return (APP().takeLaunchFile && APP().takeLaunchFile()) || null; },
   version: () => invoke('app:version'),
   setLang: (l) => invoke('app:setLang', l),
+  checkUpdate: () => invoke('app:checkUpdate'),
   onOpenFile: (cb) => onSend('open-file', cb),
 };
 window.Buffer = window.Buffer || Buffer;

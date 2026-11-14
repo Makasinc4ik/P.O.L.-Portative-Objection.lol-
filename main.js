@@ -1191,6 +1191,7 @@ function registerIpc() {
   ipcMain.handle('app:setLang', (e, l) => { UI_LANG = l === 'en' ? 'en' : 'ru'; return UI_LANG; });
   ipcMain.handle('app:launchFile', () => { const f = launchFile; launchFile = null; return f; });
   ipcMain.handle('app:openExternal', (e, url) => { if (/^https?:/.test(url)) shell.openExternal(url); });
+  ipcMain.handle('app:checkUpdate', () => checkUpdate());
   // Выбор файлов системным окном. Раньше было <input type=file accept=…>: в Windows список типов из MIME
   // и расширений иногда скрывал подходящие файлы. Здесь есть и «Все файлы».
   ipcMain.handle('dialog:pickFiles', async (e, kind, multiple) => {
@@ -1209,6 +1210,40 @@ function registerIpc() {
     return r.canceled ? [] : r.filePaths;
   });
 }
+
+// ---------- Проверка обновлений: последний выпуск в GitHub Releases ----------
+const UPDATE_REPO = 'Makasinc4ik/P.O.L.-Portative-Objection.lol-';
+function verParts(v) { return String(v || '').trim().replace(/^[^0-9]*/, '').split(/[.\-+ ]/).slice(0, 3).map((n) => parseInt(n, 10) || 0); }
+function verCmp(a, b) { const x = verParts(a); const y = verParts(b); for (let i = 0; i < 3; i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0 ? 1 : -1; } return 0; }
+function platformAsset(assets) {
+  const names = (assets || []).filter((a) => a && a.name && a.browser_download_url);
+  const pat = process.platform === 'android' ? /android.*\.apk$/i
+    : process.platform === 'win32' ? (process.arch === 'ia32' ? /win32/i : /win64/i)
+    : process.platform === 'darwin' ? /mac/i
+    : /linux.*\.appimage$/i;
+  const a = names.find((x) => pat.test(x.name)) || (process.platform === 'linux' ? names.find((x) => /linux/i.test(x.name)) : null);
+  return a ? { name: a.name, url: a.browser_download_url, size: a.size || 0 } : null;
+}
+async function checkUpdate() {
+  const current = app.getVersion();
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const r = await fetch(process.env.OO_UPDATE_API || `https://api.github.com/repos/${UPDATE_REPO}/releases?per_page=20`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'ObjectionOffline/' + current }, signal: ctl.signal });
+    if (r.status === 404) return { ok: true, current, latest: null, newer: false };
+    if (r.status === 429 || (r.status === 403 && r.headers.get('x-ratelimit-remaining') === '0')) return { ok: false, current, error: tx('GitHub временно ограничил число запросов — проверка возможна позже') };
+    if (!r.ok) return { ok: false, current, error: 'GitHub: HTTP ' + r.status };
+    const list = (await r.json()).filter((x) => x && !x.draft && !x.prerelease && /\d/.test(x.tag_name || x.name || ''));
+    if (!list.length) return { ok: true, current, latest: null, newer: false };
+    list.sort((a, b) => verCmp(b.tag_name || b.name, a.tag_name || a.name));
+    const rel = list[0];
+    const latest = String(rel.tag_name || rel.name).replace(/^[^0-9]*/, '');
+    return { ok: true, current, latest, newer: verCmp(latest, current) > 0, name: rel.name || rel.tag_name, url: rel.html_url, notes: String(rel.body || '').slice(0, 3000), date: rel.published_at || '', asset: platformAsset(rel.assets) };
+  } catch (e) {
+    return { ok: false, current, error: e && e.name === 'AbortError' ? tx('GitHub не ответил за 20 секунд') : tx('Нет связи с GitHub') + (e && e.message ? ' (' + e.message + ')' : '') };
+  } finally { clearTimeout(timer); }
+}
+global.__ooVerCmp = verCmp;
 
 // ---------- Старт ----------
 const gotLock = app.requestSingleInstanceLock();

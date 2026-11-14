@@ -310,7 +310,7 @@
       }
       if (a.actionId === 8) b.push(tx('📢 убрать значок'));
     }
-    if (f.effect && f.effect.type) b.push(tx('🎨 фильтр'));
+    { const n = window.PlayerUtil.effectsOf(f).length; if (n === 1) b.push(tx('🎨 фильтр')); else if (n > 1) b.push(tx`🎨 фильтров: ${n}`); }
     if (f.transition && f.transition.duration > 0) b.push(tx('↔ переход'));
     return b;
   }
@@ -1023,27 +1023,54 @@
     const fadeDur = h('input', { class: 'input', type: 'number', value: fade.duration ?? 500, onchange: (e) => edit((fr) => { fr.fade.duration = Number(e.target.value) || 0; }) });
     const fadeColor = h('input', { class: 'input', type: 'color', value: normHex(fade.color || '#000000'), style: { height: '34px', padding: '2px' }, onchange: (e) => edit((fr) => { fr.fade.color = e.target.value; }) });
 
-    // фильтр
+    // фильтры: основной (f.effect — как на сайте) и дополнительные (f.extraEffects); плавность общая и хранится в основном
+    const effList = window.PlayerUtil.effectsOf(f);
+    const effDefaults = { 'hue-rotate': 180, contrast: 150, saturate: 200, tint: 50 };
+    const editEffects = (fn) => edit((fr) => {
+      const L = window.PlayerUtil.effectsOf(fr).map((e) => ({ ...e }));
+      const fi = fr.effect && fr.effect.fadeInMs; const fo = fr.effect && fr.effect.fadeOutMs;
+      fn(L);
+      for (const e of L) { delete e.fadeInMs; delete e.fadeOutMs; }
+      if (L.length) { if (fi) L[0].fadeInMs = fi; if (fo) L[0].fadeOutMs = fo; }
+      fr.effect = L[0] || null;
+      if (L.length > 1) fr.extraEffects = L.slice(1); else delete fr.extraEffects;
+    }, { rerenderInspector: true });
+    const effTypes = [['grayscale', tx('Чёрно-белый')], ['sepia', tx('Сепия')], ['invert', tx('Негатив')], ['sepia-invert', tx('Сепия + негатив')], ['hue-rotate', tx('Сдвиг оттенка')], ['brightness', tx('Яркость')], ['contrast', tx('Контрастность')], ['saturate', tx('Насыщенность')], ['tint', tx('Цвет с наложением')]];
+    const effRow = (eff, idx) => {
+      const typeSel = h('select', { class: 'input', onchange: (e) => editEffects((L) => {
+        const t = e.target.value;
+        const n = { target: L[idx].target ?? 63, type: t, amount: effDefaults[t] ?? 100 };
+        if (t === 'tint') { n.color = L[idx].color || '#ff8800'; n.blend = L[idx].blend || 'multiply'; }
+        L[idx] = n;
+      }) }, effTypes.map(([v, l]) => h('option', { value: v }, l)));
+      typeSel.value = eff.type;
+      const amount = h('input', { class: 'input', type: 'number', min: eff.type === 'tint' ? 0 : undefined, max: eff.type === 'tint' ? 100 : undefined, value: eff.amount ?? (effDefaults[eff.type] ?? 100), onchange: (e) => editEffects((L) => { L[idx].amount = Number(e.target.value) || 0; }) });
+      const amountLabel = eff.type === 'hue-rotate' ? tx('Градусы') : eff.type === 'tint' ? tx('Непрозрачность, %') : ['brightness', 'contrast', 'saturate'].includes(eff.type) ? tx('Уровень, % (100 — без изменений)') : tx('Сила, %');
+      const color = eff.type === 'tint' ? h('input', { class: 'input', type: 'color', value: normHex(eff.color || '#ff8800'), style: { height: '34px', padding: '2px' }, onchange: (e) => editEffects((L) => { L[idx].color = e.target.value; }) }) : null;
+      const blend = eff.type === 'tint' ? h('select', { class: 'input', onchange: (e) => editEffects((L) => { L[idx].blend = e.target.value; }) }, window.OOBlendOptions().map(([v, l]) => h('option', { value: v }, l))) : null;
+      if (blend) blend.value = eff.blend || 'multiply';
+      // к чему применить: фон и каждый участник пары отдельно (битовая маска, как на сайте)
+      const bits = window.PlayerUtil.normTarget(eff.target);
+      const target = h('div', { class: 'checks' },
+        [[1, tx('Фон')], ...whoList].map(([bit, label]) => chk(label, bits & bit, (v) => editEffects((L) => {
+          const ALL = window.PlayerUtil.ALL_CHARS;
+          let t = window.PlayerUtil.normTarget(L[idx].target);
+          if (bit === 2 && !(pair && members.length)) t = v ? t | ALL : t & ~ALL; // одиночный персонаж — все места персонажей
+          else t = v ? t | bit : t & ~bit;
+          L[idx].target = t;
+        }))));
+      const tools = h('div', { class: 'eff-tools' },
+        idx > 0 ? h('button', { class: 'btn small', title: tx('Выше'), onclick: () => editEffects((L) => { [L[idx - 1], L[idx]] = [L[idx], L[idx - 1]]; }) }, '↑') : null,
+        h('button', { class: 'btn small', title: tx('Убрать фильтр'), onclick: () => editEffects((L) => { L.splice(idx, 1); }) }, '✕'));
+      return h('div', { class: 'eff-item' },
+        h('div', { class: 'row' }, field(effList.length > 1 ? tx`Фильтр ${idx + 1}` : tx('Тип'), typeSel), field(amountLabel, amount), tools),
+        color ? h('div', { class: 'row' }, field(tx('Цвет'), color), field(tx('Режим наложения'), blend)) : null,
+        field(tx('К чему'), target));
+    };
+    const effAdd = h('button', { class: 'btn small', onclick: () => editEffects((L) => { L.push({ type: L.length ? 'contrast' : 'grayscale', amount: L.length ? 150 : 100, target: 63 }); }) }, effList.length ? tx('＋ Ещё фильтр') : tx('＋ Добавить фильтр'));
     const eff = f.effect || {};
-    const effType = h('select', { class: 'input', onchange: (e) => edit((fr) => {
-      if (!e.target.value) fr.effect = null;
-      else fr.effect = { target: 63, amount: e.target.value === 'hue-rotate' ? 180 : 100, ...(fr.effect || {}), type: e.target.value };
-    }, { rerenderInspector: true }) },
-    [['', tx('Нет')], ['grayscale', tx('Чёрно-белый')], ['sepia', tx('Сепия')], ['invert', tx('Негатив')], ['hue-rotate', tx('Сдвиг оттенка')], ['brightness', tx('Яркость')]].map(([v, l]) => h('option', { value: v }, l)));
-    effType.value = eff.type || '';
-    const effAmount = h('input', { class: 'input', type: 'number', value: eff.amount ?? 100, onchange: (e) => edit((fr) => { fr.effect.amount = Number(e.target.value); }) });
-    // к чему применить: фон и каждый участник пары отдельно (битовая маска, как на сайте)
-    const effBits = window.PlayerUtil.normTarget(eff.target);
-    const effTarget = h('div', { class: 'checks' },
-      [[1, tx('Фон')], ...whoList].map(([bit, label]) => chk(label, effBits & bit, (v) => edit((fr) => {
-        const ALL = window.PlayerUtil.ALL_CHARS;
-        let t = window.PlayerUtil.normTarget(fr.effect.target);
-        if (bit === 2 && !(pair && members.length)) t = v ? t | ALL : t & ~ALL; // одиночный персонаж — все места персонажей
-        else t = v ? t | bit : t & ~bit;
-        fr.effect.target = t;
-      }))));
     const effIn = h('input', { class: 'input', type: 'number', min: 0, step: 100, placeholder: tx('0 — сразу'), value: eff.fadeInMs || '', onchange: (e) => edit((fr) => { const v = Math.max(0, Number(e.target.value) || 0); if (v) fr.effect.fadeInMs = v; else delete fr.effect.fadeInMs; }) });
-    const effOut = h('input', { class: 'input', type: 'number', min: 0, step: 100, placeholder: tx('0 — сразу'), value: eff.fadeOutMs || '', title: tx('Когда следующий кадр уже без этого фильтра, он снимается плавно за это время'), onchange: (e) => edit((fr) => { const v = Math.max(0, Number(e.target.value) || 0); if (v) fr.effect.fadeOutMs = v; else delete fr.effect.fadeOutMs; }) });
+    const effOut = h('input', { class: 'input', type: 'number', min: 0, step: 100, placeholder: tx('0 — сразу'), value: eff.fadeOutMs || '', title: tx('Когда следующий кадр уже без этих фильтров, они снимаются плавно за это время'), onchange: (e) => edit((fr) => { const v = Math.max(0, Number(e.target.value) || 0); if (v) fr.effect.fadeOutMs = v; else delete fr.effect.fadeOutMs; }) });
 
     // действия
     const actGet = (id) => (f.actions || []).find((a) => a.actionId === id);
@@ -1103,9 +1130,10 @@
             ? tx('Затемнение держится на этом месте пары, пока не будет «Проявления» — даже если в кадрах другие персонажи (как на сайте; меняется в настройках проекта).')
             : tx('Затемнение держится, пока на этом месте тот же персонаж и нет «Проявления». Если в следующих кадрах на этом месте другой персонаж — он виден сразу.'))) : null),
       h('div', { class: 'section' }, h('h4', null, tx('Фильтр')),
-        h('div', { class: 'row' }, field(tx('Тип'), effType), f.effect ? field(f.effect.type === 'hue-rotate' ? tx('Градусы') : tx('Сила, %'), effAmount) : null),
-        f.effect ? field(tx('К чему'), effTarget) : null,
-        f.effect ? h('div', { class: 'row' }, field(tx('Плавно наложить, мс'), effIn), field(tx('Плавно снять после, мс'), effOut)) : null),
+        effList.map(effRow),
+        h('div', { class: 'row' }, effAdd),
+        effList.length > 1 ? h('div', { class: 'hint' }, tx('Фильтры накладываются по порядку сверху вниз.')) : null,
+        effList.length ? h('div', { class: 'row' }, field(tx('Плавно наложить, мс'), effIn), field(tx('Плавно снять после, мс'), effOut)) : null),
       h('div', { class: 'section' }, h('h4', null, tx('Пара персонажей')),
         h('div', { class: 'row' }, field(tx('Пара'), pairSel), h('div', { class: 'field' }, h('button', { class: 'btn small', onclick: () => (pair ? openPairEditor(pair, f) : openSettings('pairs')) }, pair ? tx('Настроить эту пару…') : tx('Настроить пары…')))),
         pair ? h('div', { class: 'hint' }, tx('Позы участников и «Говорят все в паре» — в разделе «Поза» выше.')) : null),
@@ -1150,6 +1178,12 @@
       fxNum('opacity', tx('Непрозрачность в этом кадре, %'), own.opacity ?? 100, { max: 100, step: 5 }),
       fxNum('fadeInMs', tx('Появление, мс'), own.fadeInMs, { none: tx('0 (из картинки)') }),
       fxNum('fadeOutMs', tx('Исчезновение, мс'), own.fadeOutMs, { none: tx('0 (из картинки)') })) : null;
+    const ppBlend = own ? h('select', { class: 'input', onchange: (e) => edit((fr) => {
+      fr.popupFx = { ...(fr.popupFx || {}) };
+      if (e.target.value) fr.popupFx.blend = e.target.value; else delete fr.popupFx.blend;
+      if (!Object.keys(fr.popupFx).length) delete fr.popupFx;
+    }) }, [['', tx('Как в картинке')], ...window.OOBlendOptions()].map(([v, l]) => h('option', { value: v }, l))) : null;
+    if (ppBlend) ppBlend.value = (f.popupFx && f.popupFx.blend) || '';
     const evSide = h('select', { class: 'input', onchange: (e) => edit((fr) => { if (e.target.value) fr.evidenceSide = e.target.value; else delete fr.evidenceSide; }) },
       h('option', { value: '' }, tx('Как в настройках проекта')), h('option', { value: 'left' }, tx('Слева')), h('option', { value: 'right' }, tx('Справа')));
     evSide.value = f.evidenceSide || '';
@@ -1157,6 +1191,7 @@
       h('div', { class: 'row' }, field(tx('Заставка перед текстом (Witness Testimony и т. п.)'), pre), field(tx('Своя картинка (до смены кадра)'), ownBtn)),
       rm,
       fxRow,
+      ppBlend ? h('div', { class: 'row' }, field(tx('Режим наложения в этом кадре'), ppBlend), h('div')) : null,
       fxRow ? h('div', { class: 'note' }, tx('Пустое поле — значение из самой картинки. Исчезновение срабатывает, когда картинка уходит после этого кадра.')) : null,
       h('div', { class: 'row' }, field(tx('Значок улики в этом кадре'), evSide), h('div')),
       h('div', { class: 'note' }, tx('Сторона значка закрепляется на время кадра, чтобы при быстрой смене кадров он не прыгал. Для отдельного момента — тег [#evdi…l] (слева) или [#evdi…r] (справа), меню «🔎 Улика».')));
@@ -1454,13 +1489,17 @@
       if (window.Tags.parseText(t).some((x) => x.type === 'text' && x.fmt)) add(i, tx`${at(i)}: оформление текста (курсив, размер…) — на сайте не работает`);
       if (f.wideSpot) add(i, tx`${at(i)}: своя стойка на широком фоне — на сайте персонажи встанут по-своему`);
       if (f.effect && (f.effect.fadeInMs || f.effect.fadeOutMs)) add(i, tx`${at(i)}: плавный фильтр — на сайте включится сразу`);
+      if (Array.isArray(f.extraEffects) && f.extraEffects.some((e) => e && e.type)) add(i, tx`${at(i)}: несколько фильтров — на сайте будет только первый`);
+      if (window.PlayerUtil.effectsOf(f).some((e) => ['sepia-invert', 'contrast', 'saturate', 'tint'].includes(e.type))) add(i, tx`${at(i)}: фильтр контрастности, насыщенности, «Сепия + негатив» или цветное наложение — на сайте его нет`);
+      if (f.popupFx && f.popupFx.blend) add(i, tx`${at(i)}: режим наложения картинки — на сайте его нет`);
       if (f.fade && f.fade.onlyThisFrame) add(i, tx`${at(i)}: затемнение «только на этот кадр» — на сайте останется`);
       if ((f.actions || []).some((a) => a.actionId === 7 && String(a.actionParam || '').startsWith('c'))) add(i, tx`${at(i)}: своя заставка — на сайте не покажется`);
       if (f.charOpacity != null && Number(f.charOpacity) < 100) add(i, tx`${at(i)}: полупрозрачный персонаж — на сайте будет обычный`);
       const pp = f.popupId ? Lib.get('popups', f.popupId) : null;
+      if (pp && pp.blend && pp.blend !== 'source-over') add(i, tx`${at(i)}: режим наложения картинки «${pp.name}» — на сайте его нет`);
       if (pp && ((pp.opacity != null && Number(pp.opacity) < 100) || Number(pp.fadeInMs) > 0 || Number(pp.fadeOutMs) > 0)) add(i, tx`${at(i)}: прозрачность или плавное появление картинки «${pp.name}» — на сайте её нет`);
       if (f.pairAllTalk && f.pair) add(i, tx`${at(i)}: «Говорят все в паре» — на сайте говорит только один персонаж`);
-      if (f.popupFx) add(i, tx`${at(i)}: своя прозрачность или плавность картинки в кадре — на сайте её нет`);
+      if (f.popupFx && Object.keys(f.popupFx).some((k) => k !== 'blend')) add(i, tx`${at(i)}: своя прозрачность или плавность картинки в кадре — на сайте её нет`);
       if (f.evidenceSide) add(i, tx`${at(i)}: сторона значка улики закреплена в кадре — на сайте она зависит от говорящего`);
       if (/\[#(bgmse|bgmfoe|bgsse|bgsfoe|evdhe)\]/i.test(t)) add(i, tx`${at(i)}: тег «в конце кадра» ([#…e]) — на сайте его нет`);
       if (/\[#bgsfoe?\]/i.test(t)) add(i, tx`${at(i)}: плавное заглушение звуков [#bgsfo] — на сайте его нет`);
@@ -2006,6 +2045,7 @@
       if (act === 'libdir') openLibraryDirDialog();
       if (act === 'uifont') openFrameFontDialog();
       if (act === 'lang') switchLanguage();
+      if (act === 'update') checkUpdates(true);
       if (act === 'code') downloadByCodeFlow('characters');
       if (act === 'mine') downloadMineFlow();
       if (act === 'login') loginFlow();
@@ -2232,6 +2272,48 @@
     window.setUiLang(to);
   }
 
+  // ---------- Проверка обновлений (GitHub Releases) ----------
+  const RELEASES_URL = 'https://github.com/Makasinc4ik/P.O.L.-Portative-Objection.lol-/releases';
+  function autoCheckUpdate() {
+    if (!window.api.checkUpdate || localStorage.getItem('oo.updateAuto') === '0') return;
+    const last = Number(localStorage.getItem('oo.updateChecked') || 0);
+    if (Date.now() - last < 20 * 3600e3) return; // не чаще раза в день
+    checkUpdates(false);
+  }
+  async function checkUpdates(manual) {
+    if (!window.api.checkUpdate) return;
+    if (manual) toast(tx('Проверка обновлений…'), 1500);
+    const r = await window.api.checkUpdate().catch((e) => ({ ok: false, error: e.message, current: App.version }));
+    if (r.ok) localStorage.setItem('oo.updateChecked', String(Date.now()));
+    if (!manual && (!r.ok || !r.newer || localStorage.getItem('oo.updateSkip') === r.latest)) return;
+    showUpdateDialog(r, manual);
+  }
+  App.checkUpdates = checkUpdates;
+  function showUpdateDialog(r, manual) {
+    let m;
+    const ext = (url) => { window.api.openExternal(url); };
+    const auto = h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: localStorage.getItem('oo.updateAuto') !== '0', onchange: (e) => localStorage.setItem('oo.updateAuto', e.target.checked ? '1' : '0') }), tx('Проверять при запуске (не чаще раза в день)'));
+    const body = [];
+    if (!r.ok) body.push(h('p', null, tx('Не удалось проверить обновления.')), h('div', { class: 'note' }, r.error || ''));
+    else if (r.newer) {
+      body.push(h('p', { style: { lineHeight: 1.6 } }, tx`Доступна новая версия: ${r.latest}. Установлена: ${r.current}.`));
+      if (r.name && r.name !== r.latest && r.name !== 'v' + r.latest) body.push(h('p', null, h('b', null, r.name)));
+      if (r.notes) body.push(h('div', { class: 'note', style: { whiteSpace: 'pre-wrap', maxHeight: '260px', overflow: 'auto' } }, r.notes));
+      body.push(h('div', { class: 'hint' }, r.asset ? tx`Файл для этой системы: ${r.asset.name}${r.asset.size ? ' (' + fmtBytes(r.asset.size) + ')' : ''}. Проекты и библиотека остаются на месте — новая версия ставится поверх старой или распаковывается рядом.` : tx('Файл для этой системы на странице выпуска не найден — подходящий архив выбирается вручную.')));
+    } else if (!r.latest) body.push(h('p', null, tx`Установлена версия ${r.current}. В репозитории пока нет выпусков (Releases).`));
+    else body.push(h('p', null, tx`Установлена последняя версия: ${r.current}.`));
+    body.push(auto);
+    const foot = [];
+    if (r.ok && r.newer) {
+      foot.push(h('button', { class: 'btn', onclick: () => { localStorage.setItem('oo.updateSkip', r.latest); m.close(); } }, tx('Пропустить эту версию')));
+      foot.push(h('button', { class: 'btn', onclick: () => ext(r.url || RELEASES_URL) }, tx('Страница выпуска')));
+      if (r.asset) foot.push(h('button', { class: 'btn primary', onclick: () => { ext(r.asset.url); m.close(); } }, tx('Скачать')));
+    } else foot.push(h('button', { class: 'btn', onclick: () => ext(RELEASES_URL) }, tx('Открыть страницу выпусков')));
+    m = modal({ title: r.ok && r.newer ? tx('Есть обновление') : tx('Проверка обновлений'), body, foot });
+    return m;
+  }
+  App.showUpdateDialog = showUpdateDialog;
+
   // ---------- Телефон и планшет (Android) ----------
   // Узкий экран: сверху просмотр, ниже вкладки «Кадры» / «Кадр» (настройки выбранного кадра).
   // Кнопка «Назад» закрывает окна и полный экран; при открытой клавиатуре просмотр прячется.
@@ -2322,6 +2404,7 @@
     if (!restored) setProject(newProject());
     const openPath = async (p) => { try { await doOpen(await window.api.project.readPath(p)); } catch (e) { toast(tx('Не удалось открыть: ') + e.message, 5000); } };
     window.api.onOpenFile && window.api.onOpenFile(openPath);
+    setTimeout(autoCheckUpdate, 6000);
     const lf = window.api.launchFile ? await window.api.launchFile() : null;
     if (lf) { await openPath(lf); return; }
     try {

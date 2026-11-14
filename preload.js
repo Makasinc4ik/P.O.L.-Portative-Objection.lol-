@@ -89,5 +89,6 @@ contextBridge.exposeInMainWorld('api', {
   launchFile: () => ipcRenderer.invoke('app:launchFile'),
   version: () => ipcRenderer.invoke('app:version'),
   setLang: (l) => ipcRenderer.invoke('app:setLang', l),
+  checkUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
   onOpenFile: (cb) => ipcRenderer.on('open-file', (e, p) => cb(p)),
 });

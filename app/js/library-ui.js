@@ -4,6 +4,9 @@
   const { h, modal, toast, confirmDialog, pickerDialog, progressDialog, fmtBytes } = window.UI;
   const { Lib, SYSTEM, Marks } = window.Assets;
 
+  // Режимы наложения (для цветного фильтра и своих картинок)
+  window.OOBlendOptions = () => [['source-over', tx('Обычное')], ['multiply', tx('Умножение')], ['screen', tx('Экран')], ['overlay', tx('Перекрытие')], ['soft-light', tx('Мягкий свет')], ['hard-light', tx('Жёсткий свет')], ['darken', tx('Замена тёмным')], ['lighten', tx('Замена светлым')], ['color-dodge', tx('Осветление основы')], ['color-burn', tx('Затемнение основы')], ['difference', tx('Разница')], ['exclusion', tx('Исключение')], ['hue', tx('Цветовой тон')], ['saturation', tx('Насыщенность')], ['color', tx('Цветность')], ['luminosity', tx('Светимость')]];
+
   const TABS = [
     { type: 'characters', label: tx('Персонажи'), icon: '🧑' },
     { type: 'backgrounds', label: tx('Фоны'), icon: '🏞' },
@@ -466,6 +469,7 @@
       const w = a.resize || 0;
       Object.assign(img.style, a.center ? { width: w + '%', left: '50%', top: '50%', transform: 'translate(-50%,-50%)' } : { width: w + '%', left: (a.posX || 0) + '%', top: (a.posY || 0) + '%' });
       img.style.opacity = a.opacity == null ? 1 : Math.max(0, Math.min(100, Number(a.opacity))) / 100;
+      img.style.mixBlendMode = a.blend && a.blend !== 'source-over' ? a.blend : '';
       prev.append(img);
     };
     const n = (k, label, def) => field(label, num(a[k] ?? def, (v) => { a[k] = v ?? def; render(); }));
@@ -476,6 +480,7 @@
       h('div', { class: 'row' }, n('resize', tx('Ширина, % кадра'), 30), n('posX', tx('Слева, %'), 0), n('posY', tx('Сверху, %'), 0)),
       chk(tx('По центру кадра'), a.center, (v) => { a.center = v; render(); }),
       chk(tx('Поверх окна текста (обычно картинка под окном)'), a.aboveTextbox, (v) => { a.aboveTextbox = v; }),
+      field(tx('Режим наложения'), sel(window.OOBlendOptions(), a.blend || 'source-over', (v) => { if (v && v !== 'source-over') a.blend = v; else delete a.blend; render(); })),
       h('div', { class: 'row' },
         field(tx('Непрозрачность, %'), num(a.opacity ?? 100, (v) => { if (v == null || v >= 100) delete a.opacity; else a.opacity = Math.max(0, v); render(); }, { min: 0, max: 100 })),
         field(tx('Плавное появление, мс'), num(a.fadeInMs ?? '', (v) => { if (v > 0) a.fadeInMs = v; else delete a.fadeInMs; }, { placeholder: tx('0 — сразу') })),

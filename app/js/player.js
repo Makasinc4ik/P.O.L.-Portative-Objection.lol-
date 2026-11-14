@@ -17,6 +17,34 @@
   const ALL_CHARS = (MAX_SLOT << 1) - 2; // все места персонажей
   // маска «к чему применить фильтр»: старые 63 (фон + 5 мест) и 62 (5 мест) у сайта значат «всё» и «все персонажи»
   const normTarget = (t) => { t = t == null ? 63 : Number(t); if (t === 63) return ALL_CHARS | 1; if (t === 62) return ALL_CHARS; return t; };
+  // Режимы наложения (canvas globalCompositeOperation)
+  const BLENDS = ['source-over', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'];
+  const blendOf = (b) => (BLENDS.includes(b) ? b : 'source-over');
+  // Все фильтры кадра: основной (f.effect, как на сайте) и дополнительные (f.extraEffects)
+  const effectsOf = (f) => [f && f.effect, ...((f && Array.isArray(f.extraEffects)) ? f.extraEffects : [])].filter((e) => e && e.type);
+  const effSig = (e) => [e.type, Number(e.amount ?? 100), normTarget(e.target), e.color || '', e.blend || ''].join(',');
+  function filterSet(f) {
+    const list = effectsOf(f);
+    if (!list.length) return null;
+    const p = list[0];
+    return { list, fadeInMs: Math.max(0, Number(p.fadeInMs) || 0), fadeOutMs: Math.max(0, Number(p.fadeOutMs) || 0), sig: list.map(effSig).join('|') };
+  }
+  function cssOne(e, k) {
+    const amount = Number(e.amount ?? 100);
+    const a = amount * k;
+    const lin = 100 + (amount - 100) * k;
+    switch (e.type) {
+      case 'invert': return `invert(${a}%)`;
+      case 'grayscale': return `grayscale(${a}%)`;
+      case 'sepia': return `sepia(${a}%)`;
+      case 'sepia-invert': return `sepia(${a}%) invert(${a}%)`;
+      case 'hue-rotate': return `hue-rotate(${a}deg)`;
+      case 'brightness': return `brightness(${lin}%)`;
+      case 'contrast': return `contrast(${lin}%)`;
+      case 'saturate': return `saturate(${lin}%)`;
+      default: return null;
+    }
+  }
   // Плавности для переходов (как на objection.lol: id → функция 0..1)
   function bezier(x1, y1, x2, y2) {
     return (t) => {
@@ -63,7 +91,7 @@
     const fx = (f && f.popupFx) || {};
     const pick = (k) => { const v = fx[k] != null && fx[k] !== '' ? fx[k] : pp[k]; return v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v); };
     const op = pick('opacity');
-    return { opacity: op == null ? 1 : Math.max(0, Math.min(100, op)) / 100, fadeInMs: Math.max(0, pick('fadeInMs') || 0), fadeOutMs: Math.max(0, pick('fadeOutMs') || 0) };
+    return { opacity: op == null ? 1 : Math.max(0, Math.min(100, op)) / 100, fadeInMs: Math.max(0, pick('fadeInMs') || 0), fadeOutMs: Math.max(0, pick('fadeOutMs') || 0), blend: blendOf(fx.blend || pp.blend) };
   }
   const pfx = (p) => p.fx || (p.fx = popupFx(p.asset, null));
 
@@ -752,7 +780,7 @@
       st.charOpacity = f.charOpacity != null && f.charOpacity !== '' && Number(f.charOpacity) < 100 ? Math.max(0, Number(f.charOpacity)) / 100 : null;
       st.frameEvSide = f.evidenceSide === 'left' || f.evidenceSide === 'right' ? f.evidenceSide : null;
       st.wideSpot = this.wideSpotFor(f, scene.chars);
-      this.applyFilter(f.effect, s);
+      this.applyFilter(filterSet(f), s);
       const pp = f.popupId ? Lib.get('popups', f.popupId) : null;
       if (!(pp && st.popup && st.popup.asset.id === pp.id)) {
         // старая картинка с плавным исчезновением гаснет поверх сцены, пока появляется новая
@@ -1123,12 +1151,12 @@
         if (st.bubble.shake && now - st.bubble.start < BUBBLE_SHAKE_MS + 20) return null;
         p.push('u', bid(st.bubble.img.frameAt(now - st.bubble.start, false)), st.bubble.fullscreen ? 1 : 0);
       }
-      if (st.filter) p.push('f', st.filter.type, st.filter.amount, st.filter.target, (st.filterK ?? 1).toFixed(3));
+      if (st.filter) p.push('f', st.filter.sig, (st.filterK ?? 1).toFixed(3));
       if (st.popupOut) return null; // картинка гаснет
       if (st.popup && st.popup.img) {
         const fx = pfx(st.popup);
         if (fx.fadeInMs > 0 && now - st.popup.shownAt < fx.fadeInMs + 20) return null; // проявляется
-        p.push('pp', bid(st.popup.img.frameAt(now - st.popup.start, true)), fx.opacity.toFixed(3));
+        p.push('pp', bid(st.popup.img.frameAt(now - st.popup.start, true)), fx.opacity.toFixed(3), fx.blend);
       }
       p.push('co', st.charOpacity ?? 1);
       for (const x of st.presetPopups) if (x.img) p.push('pr', bid(x.img.frameAt(now - x.start, false)));
@@ -1175,16 +1203,24 @@
       const ov = st.overlay && st.overlay.a > 0 ? st.overlay : null;
       const drawOverlay = (full) => { g.fillStyle = hexA(ov.color, Math.min(1, ov.a)); if (full) g.fillRect(0, 0, W, H); else g.fillRect(-W, -H, W * 3, H * 3); };
       const filter = st.filter && (st.filterK ?? 1) > 0 ? this.cssFilter(st.filter, st.filterK ?? 1) : null;
+      // слой сцены с фильтрами: bit — 1 (фон и стол) или место персонажа
+      const layer = (bit, fn) => {
+        if (!filter) { fn(); return; }
+        const css = filter.cssFor(bit);
+        const tints = filter.tintsFor(bit);
+        if (!tints.length) { if (css) g.filter = css; fn(); g.filter = 'none'; return; }
+        this.drawTinted(css, tints, fn);
+      };
       // при тряске края кадра раньше открывали чёрные полосы (особенно заметно в 9:16) —
       // подкладываем неподвижный фон со столом, сдвинутая сцена рисуется поверх
       const wv = this.wideView();
       if ((dx || dy) && st.bg && st.bg.img) {
         g.save();
         this.zoomScene(wv);
-        if (filter && filter.bg) g.filter = filter.css;
-        this.drawBgLayer(st.bg.img, st.bg, now);
-        if (st.bg.desk) this.drawBgLayer(st.bg.desk, st.bg, now);
-        g.filter = 'none';
+        layer(1, () => {
+          this.drawBgLayer(st.bg.img, st.bg, now);
+          if (st.bg.desk) this.drawBgLayer(st.bg.desk, st.bg, now);
+        });
         g.restore();
       }
       g.save();
@@ -1192,9 +1228,7 @@
       this.zoomScene(wv);
       // фон
       if (st.bg && st.bg.img) {
-        if (filter && filter.bg) g.filter = filter.css;
-        this.drawBgLayer(st.bg.img, st.bg, now);
-        g.filter = 'none';
+        layer(1, () => this.drawBgLayer(st.bg.img, st.bg, now));
       }
       if (ov && ov.target === 'background') drawOverlay(false);
       // персонажи
@@ -1210,16 +1244,12 @@
         const alpha = (st.charAlpha[ch.slot] ?? 1) * (ch.isMain && st.charOpacity != null ? st.charOpacity : 1);
         if (alpha <= 0) continue;
         g.globalAlpha = Math.min(1, alpha);
-        if (filter && (filter.target & ch.slot)) g.filter = filter.css;
-        this.drawCharacter(bmp, ch);
-        g.filter = 'none';
+        layer(ch.slot, () => this.drawCharacter(bmp, ch));
         g.globalAlpha = 1;
       }
       // стол: фильтр фона действует и на него
       if (st.bg && st.bg.desk) {
-        if (filter && filter.bg) g.filter = filter.css;
-        this.drawBgLayer(st.bg.desk, st.bg, now);
-        g.filter = 'none';
+        layer(1, () => this.drawBgLayer(st.bg.desk, st.bg, now));
       }
       if (ov && ov.target === 'scene') drawOverlay(false);
       g.restore();
@@ -1239,6 +1269,7 @@
         const y = a.center ? (H - hh) / 2 : (H * (a.posY || 0)) / 100;
         g.save();
         g.globalAlpha = Math.max(0, Math.min(1, alpha));
+        g.globalCompositeOperation = blendOf(pfx(pp).blend);
         g.drawImage(bmp, x + dx, y + dy, w, hh);
         g.restore();
       };
@@ -1367,39 +1398,67 @@
     }
 
     // Фильтр кадра. Если у него задано плавное появление/снятие (fadeInMs/fadeOutMs), сила меняется постепенно
-    applyFilter(eff, s) {
+    applyFilter(nf, s) {
       const st = this.state;
-      const nf = eff && eff.type ? eff : null;
       const old = st.filter;
-      const same = (a, b) => a && b && a.type === b.type && Number(a.amount ?? 100) === Number(b.amount ?? 100) && normTarget(a.target) === normTarget(b.target);
       const token = (this.filterToken = (this.filterToken || 0) + 1);
       const run = (ms, fn) => this.animate(ms, (t) => { if (this.filterToken === token) fn(t); }, s).catch(() => {});
-      if (nf && same(nf, old)) { st.filter = nf; if (st.filterK < 1 && !(Number(nf.fadeInMs) > 0)) st.filterK = 1; else if (st.filterK < 1) { const from = st.filterK; run(Number(nf.fadeInMs) * (1 - from), (t) => { st.filterK = from + (1 - from) * t; }); } return; }
+      if (nf && old && nf.sig === old.sig) { st.filter = nf; if (st.filterK < 1 && !(nf.fadeInMs > 0)) st.filterK = 1; else if (st.filterK < 1) { const from = st.filterK; run(nf.fadeInMs * (1 - from), (t) => { st.filterK = from + (1 - from) * t; }); } return; }
       if (!nf) {
-        if (old && Number(old.fadeOutMs) > 0 && st.filterK > 0) {
+        if (old && old.fadeOutMs > 0 && st.filterK > 0) {
           const from = st.filterK;
-          run(Number(old.fadeOutMs), (t) => { st.filterK = from * (1 - t); if (t >= 1) { st.filter = null; st.filterK = 1; } });
+          run(old.fadeOutMs, (t) => { st.filterK = from * (1 - t); if (t >= 1) { st.filter = null; st.filterK = 1; } });
         } else { st.filter = null; st.filterK = 1; }
         return;
       }
       st.filter = nf;
-      if (Number(nf.fadeInMs) > 0) { st.filterK = 0; run(Number(nf.fadeInMs), (t) => { st.filterK = t; }); } else st.filterK = 1;
+      if (nf.fadeInMs > 0) { st.filterK = 0; run(nf.fadeInMs, (t) => { st.filterK = t; }); } else st.filterK = 1;
     }
 
-    cssFilter(f, k = 1) {
-      const amount = Number(f.amount ?? 100);
-      const a = amount * k;
-      let css = '';
-      switch (f.type) {
-        case 'invert': css = `invert(${a}%)`; break;
-        case 'grayscale': css = `grayscale(${a}%)`; break;
-        case 'sepia': css = `sepia(${a}%)`; break;
-        case 'hue-rotate': css = `hue-rotate(${a}deg)`; break;
-        case 'brightness': css = `brightness(${100 + (amount - 100) * k}%)`; break;
-        default: return null;
-      }
-      const target = normTarget(f.target);
-      return { css, bg: !!(target & 1), chars: !!(target & ALL_CHARS), target };
+    // Набор фильтров → CSS-строка и цветные наложения для каждого слоя (фон/стол — бит 1, персонаж — бит места)
+    cssFilter(set, k = 1) {
+      const cache = new Map();
+      const forBit = (bit) => {
+        let r = cache.get(bit);
+        if (r) return r;
+        const css = []; const tints = [];
+        for (const e of set.list) {
+          if (!(normTarget(e.target) & bit)) continue;
+          if (e.type === 'tint') { const op = Math.max(0, Math.min(100, Number(e.amount ?? 50))) / 100 * k; if (op > 0) tints.push({ color: e.color || '#ff8800', blend: blendOf(e.blend || 'multiply'), alpha: op }); continue; }
+          const c = cssOne(e, k);
+          if (c) css.push(c);
+        }
+        r = { css: css.length ? css.join(' ') : null, tints };
+        cache.set(bit, r);
+        return r;
+      };
+      return { cssFor: (bit) => forBit(bit).css, tintsFor: (bit) => forBit(bit).tints };
+    }
+
+    // Слой с цветным наложением: рисуется отдельно, закрашивается в своём режиме наложения и обрезается по своей форме
+    drawTinted(css, tints, fn) {
+      const main = this.g;
+      const cw = main.canvas.width; const chh = main.canvas.height;
+      const mk = (c) => { if (!c) c = document.createElement('canvas'); if (c.width !== cw || c.height !== chh) { c.width = cw; c.height = chh; } return c; };
+      this.tintA = mk(this.tintA); this.tintB = mk(this.tintB);
+      const A = this.tintA.getContext('2d'); const B = this.tintB.getContext('2d');
+      A.setTransform(1, 0, 0, 1, 0, 0); A.globalAlpha = 1; A.globalCompositeOperation = 'source-over'; A.filter = 'none'; A.clearRect(0, 0, cw, chh);
+      A.setTransform(main.getTransform());
+      A.globalAlpha = main.globalAlpha;
+      A.imageSmoothingEnabled = main.imageSmoothingEnabled;
+      if (css) A.filter = css;
+      this.g = A;
+      try { fn(); } finally { this.g = main; }
+      A.setTransform(1, 0, 0, 1, 0, 0); A.filter = 'none'; A.globalAlpha = 1;
+      B.setTransform(1, 0, 0, 1, 0, 0); B.globalAlpha = 1; B.filter = 'none';
+      B.globalCompositeOperation = 'copy'; B.drawImage(this.tintA, 0, 0);
+      for (const t of tints) { B.globalCompositeOperation = t.blend; B.globalAlpha = Math.min(1, t.alpha); B.fillStyle = t.color; B.fillRect(0, 0, cw, chh); }
+      B.globalAlpha = 1; B.globalCompositeOperation = 'destination-in'; B.drawImage(this.tintA, 0, 0);
+      B.globalCompositeOperation = 'source-over';
+      main.save();
+      main.setTransform(1, 0, 0, 1, 0, 0); main.globalAlpha = 1; main.filter = 'none';
+      main.drawImage(this.tintB, 0, 0);
+      main.restore();
     }
 
     // Сцена (фон и персонажи). В вертикальном видео (9:16) сцена остаётся 16:9 по высоте кадра
@@ -2046,7 +2105,7 @@
       st.wideSpot = this.wideSpotFor(f, scene.chars);
       if (f.transition && f.transition.left != null) st.bgLeft = Number(f.transition.left) || 0;
       st.view = st.bgLeft;
-      st.filter = f.effect && f.effect.type ? f.effect : null;
+      st.filter = filterSet(f);
       st.filterK = 1;
       st.popupOut = null;
       st.popup = pp ? { asset: pp, img: ppImg, start: this.now(), shownAt: -1e9, fx: popupFx(pp, f) } : null;
@@ -2104,5 +2163,5 @@
 
   Player.instances = new Set();
   window.Player = Player;
-  window.PlayerUtil = { aspectOf, computeBackgrounds, sceneCharacters, applyAlias, findPair, POPUPS, MAX_PAIR, ALL_CHARS, normTarget, pairLimit, guessDesign, DESIGN_ASPECTS };
+  window.PlayerUtil = { BLENDS, effectsOf, aspectOf, computeBackgrounds, sceneCharacters, applyAlias, findPair, POPUPS, MAX_PAIR, ALL_CHARS, normTarget, pairLimit, guessDesign, DESIGN_ASPECTS };
 })();
