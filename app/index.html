@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' oo: data: blob:; img-src 'self' oo: data: blob: https: http:; media-src 'self' oo: data: blob: https: http:; connect-src 'self' oo: data: blob: https: http:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Objection Offline</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">objection<span>.offline</span> <small id="appVersion" class="ver"></small></div>
+    <div class="menu">
+      <button class="tb" data-menu="file">Файл ▾</button>
+      <button class="tb" id="btnScenes">Сцены</button>
+      <button class="tb" id="btnLibrary">Библиотека</button>
+      <button class="tb" id="btnSettings">Настройки проекта</button>
+    </div>
+    <div class="title" id="projectTitle">Новый проект</div>
+    <div class="actions">
+      <button class="tb accent" id="btnPlayAll">▶ Смотреть с начала</button>
+      <button class="tb red" id="btnExport">● Экспорт видео</button>
+    </div>
+  </header>
+
+  <div id="fileMenu" class="dropdown hidden">
+    <button data-act="new">Новый проект <kbd>Ctrl+Alt+N</kbd></button>
+    <button data-act="open">Открыть… <kbd>Ctrl+O</kbd></button>
+    <button data-act="save">Сохранить <kbd>Ctrl+S</kbd></button>
+    <button data-act="saveas">Сохранить как…</button>
+    <hr>
+    <button data-act="download">Докачать ресурсы проекта с objection.lol</button>
+    <button data-act="code">Персонаж по коду доступа…</button>
+    <button data-act="mine">Скачать ресурсы аккаунта objection.lol…</button>
+    <button data-act="login" id="menuLogin">Вход на objection.lol…</button>
+    <hr>
+    <button data-act="libdir">Папка библиотеки (где лежат ресурсы)…</button>
+    <button data-act="lang" id="menuLang">🌐 English</button>
+    <button data-act="uifont">Размер текста в списке кадров…</button>
+  </div>
+
+  <main id="layout">
+    <section id="framesPane">
+      <div class="pane-head">
+        <button class="tb small" id="btnAddFrameTop">＋ Кадр в начало</button>
+        <span class="muted" id="frameCount"></span>
+        <div class="spacer"></div>
+        <input id="frameSearch" type="search" placeholder="Поиск по тексту…">
+      </div>
+      <div class="selbar hidden" id="selBar"></div>
+      <div id="frameList"></div>
+      <div class="pager" id="pager"></div>
+    </section>
+
+    <aside id="sidePane">
+      <div id="stage">
+        <canvas id="screen"></canvas>
+        <div id="stageHint" class="hidden">Щелчок — продолжить</div>
+      </div>
+      <div class="player-bar">
+        <button class="tb small" id="btnPlayHere" title="Проиграть с выбранного кадра (P)">▶ С этого кадра</button>
+        <button class="tb small" id="btnStop" title="Остановить (Esc)">■ Стоп</button>
+        <label class="chk"><input type="checkbox" id="chkManual"> По клику</label>
+        <label class="chk" title="Если начать просмотр с середины, включить музыку, которая играла в предыдущих кадрах"><input type="checkbox" id="chkResumeMusic"> Музыка с прошлых кадров</label>
+        <label class="chk" title="Просмотр (с начала и с любого кадра) открывается на весь экран. Esc — выход и остановка. Без галочки просмотр идёт в окне."><input type="checkbox" id="chkFull"> На весь экран</label>
+        <div class="spacer"></div>
+        <span class="muted" id="playInfo"></span>
+      </div>
+      <div id="inspector"></div>
+    </aside>
+  </main>
+
+  <div id="modalRoot"></div>
+  <div id="toast" class="hidden"></div>
+
+  <script src="js/lang-en.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/tags.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/player.js"></script>
+  <script src="vendor/mp4-muxer.js"></script>
+  <script src="js/exporter.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/library-ui.js"></script>
+  <script src="js/editor.js"></script>
+</body>
+</html>

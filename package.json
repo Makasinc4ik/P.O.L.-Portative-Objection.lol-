@@ -1,0 +1,14 @@
+{
+  "name": "objection-offline",
+  "productName": "Objection Offline",
+  "version": "1.0.0",
+  "description": "Офлайн-редактор сцен в стиле Ace Attorney (аналог objection.lol)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "33.4.11"
+  }
+}

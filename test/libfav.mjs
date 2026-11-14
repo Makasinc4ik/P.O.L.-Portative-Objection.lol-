@@ -1,0 +1,31 @@
+import { _electron as electron } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+import fs from 'fs';
+const ROOT = '/home/claude/oo', OUT = ROOT + '/test/out12';
+const app = await electron.launch({ executablePath: ROOT + '/node_modules/electron/dist/electron', args: ['--no-sandbox', ROOT], env: { ...process.env, OO_LIBRARY: '/tmp/fresh/Library' } });
+const win = await app.firstWindow();
+const logs = [];
+win.on('pageerror', (e) => logs.push('[pageerror] ' + e.message));
+await win.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
+await win.waitForTimeout(2500);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+await win.evaluate(() => { window.App.dirty = false; });
+await win.evaluate((t) => window.App.open({ path: '/tmp/Minecraft.objection', name: 'Minecraft.objection', text: t }), fs.readFileSync('/mnt/user-data/uploads/d50e114a-Minecraft.objection', 'utf8'));
+await win.waitForTimeout(800);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+await win.evaluate(() => { window.App.select ? window.App.select(3) : null; });
+await win.waitForTimeout(400);
+await win.screenshot({ path: OUT + '/inspector.png' });
+await win.locator('#inspector .picker-line .btn').first().click();
+await win.waitForTimeout(1500);
+const r = await win.evaluate(async () => {
+  const M = window.Assets.Marks, L = window.Assets.Lib;
+  const c = L.list('characters')[0];
+  await M.set('characters', c.id, { fav: true, tags: ['Адвокаты'] });
+  return { sel: document.querySelector('.modal-wrap .lib-edit input')?.value, n: document.querySelectorAll('.modal-wrap .card').length };
+});
+// перерисовать: переключить сортировку
+await win.evaluate(() => { const s = [...document.querySelectorAll('.modal-wrap select')].find((x) => [...x.options].some((o) => o.value === 'name-desc')); s.value = 'name'; s.dispatchEvent(new Event('change')); });
+await win.waitForTimeout(1500);
+await win.screenshot({ path: OUT + '/library.png' });
+console.log(JSON.stringify(r), logs);
+await app.close();

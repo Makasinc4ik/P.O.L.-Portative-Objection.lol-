@@ -1,0 +1,23 @@
+import { _electron as electron } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+import fs from 'fs';
+const ROOT = '/home/claude/oo';
+const app = await electron.launch({ executablePath: process.env.EL || (ROOT + '/node_modules/electron/dist/electron'), args: ['--no-sandbox', ROOT], env: { ...process.env, OO_LIBRARY: '/tmp/fresh/Library' } });
+const win = await app.firstWindow();
+const logs = [];
+win.on('pageerror', (e) => logs.push('[pageerror] ' + e.message));
+await win.waitForTimeout(2500);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+await win.evaluate(() => { window.App.dirty = false; });
+await win.evaluate((t) => window.App.open({ path: '/tmp/Minecraft.objection', name: 'Minecraft.objection', text: t }), fs.readFileSync('/mnt/user-data/uploads/d50e114a-Minecraft.objection', 'utf8'));
+await win.waitForTimeout(800);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+await app.evaluate(({ dialog }) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: '/tmp/port.mp4' }); });
+const timer = setInterval(async () => { try { console.log('prog', await win.evaluate(() => window.__p)); } catch (e) {} }, 10000);
+await win.evaluate((m) => { if (m) window.__ooBRMode = m; }, process.env.BRM || '');
+const r = await win.evaluate(async (q) => {
+  const P = window.App;
+  P.project.options.aspectRatio = '9:16'; P.player.setProject(P.project);
+  return window.Exporter.exportVideo(P.player, P.audio, { from: 0, to: 14, height: 720, fps: 30, quality: q, suggestedName: 'x', onProgress: (p) => { window.__p = p.text || JSON.stringify(p); }, onPreview: () => {} });
+}, process.env.Q || 'medium');
+clearInterval(timer); console.log(JSON.stringify(r), logs);
+await app.close();

@@ -1,0 +1,21 @@
+import { _electron as electron } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+import fs from 'fs';
+const ROOT = '/home/claude/oo';
+fs.rmSync(ROOT + '/test/LibraryP', { recursive: true, force: true });
+const app = await electron.launch({ executablePath: ROOT + '/node_modules/electron/dist/electron', args: ['--no-sandbox', ROOT], env: { ...process.env, OO_LIBRARY: ROOT + '/test/LibraryP' } });
+const win = await app.firstWindow();
+await win.waitForTimeout(1500);
+const t0 = Date.now();
+const r = await win.evaluate(async () => {
+  let last = null;
+  window.api.download.onProgress((p) => { last = p; });
+  const res = await window.api.download.presets();
+  return { res, last };
+});
+console.log('TIME', Math.round((Date.now() - t0) / 1000), 's');
+console.log(JSON.stringify(r).slice(0, 2000));
+const proc = app.process();
+await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close()).catch(() => {});
+await new Promise((r) => setTimeout(r, 1500));
+proc.kill('SIGKILL');
+process.exit(0);

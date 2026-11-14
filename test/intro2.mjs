@@ -1,0 +1,32 @@
+import { _electron as electron } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+import fs from 'fs';
+const ROOT = '/home/claude/oo';
+const app = await electron.launch({ executablePath: ROOT + '/node_modules/electron/dist/electron', args: ['--no-sandbox', ROOT], env: { ...process.env, OO_LIBRARY: '/tmp/fresh/Library' } });
+const win = await app.firstWindow();
+const logs = [];
+win.on('pageerror', (e) => logs.push('[pageerror] ' + e.message));
+win.on('console', (m) => logs.push('[' + m.type() + '] ' + m.text()));
+await win.waitForTimeout(2500);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+await win.evaluate(() => { window.App.dirty = false; });
+await win.evaluate((t) => window.App.open({ path: '/tmp/Minecraft.objection', name: 'Minecraft.objection', text: t }), fs.readFileSync('/mnt/user-data/uploads/d50e114a-Minecraft.objection', 'utf8'));
+await win.waitForTimeout(800);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+const r = await win.evaluate(async () => {
+  const L = window.Assets.Lib, A = window.App;
+  const p = L.list('popups')[0];
+  const f = A.project.groups[0].frames[1];
+  f.popupId = p.id;
+  A.player.setProject(A.project);
+  const pf = A.player.frames[1];
+  A.player.playFrom(1, {});
+  const seen = [];
+  for (let i = 0; i < 12; i++) { await new Promise((r) => setTimeout(r, 200)); seen.push((A.player.state.popup ? 'popup' : '-') + '|' + (A.player.state.chars[0]?.override ? 'anim' : '') + (i === 3 ? (window.__shot = 1, '') : ''));
+    if (i === 3) window.__img = document.querySelector('#stage canvas').toDataURL('image/png'); }
+  A.player.stop();
+  return { img: window.__img, pf: pf && pf.actions, same: pf === f, seen, text: (f.text || '').slice(0, 30) };
+});
+await win.locator('#stage canvas').screenshot({ path: '/home/claude/oo/test/out12/popanim.png' }).catch(()=>{});
+fs.writeFileSync('/home/claude/oo/test/out12/popanim.png', Buffer.from(r.img.split(',')[1], 'base64')); delete r.img;
+console.log(JSON.stringify(r, null, 1), logs.filter((l) => !l.startsWith('[log]')).slice(-10));
+await app.close();

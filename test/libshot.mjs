@@ -1,0 +1,11 @@
+import { _electron as electron } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const ROOT = '/home/claude/oo', OUT = ROOT + '/test/out';
+const app = await electron.launch({ executablePath: ROOT + '/node_modules/electron/dist/electron', args: ['--no-sandbox', ROOT], env: { ...process.env, OO_LIBRARY: process.env.LIB || ROOT + '/test/LibraryP' } });
+const win = await app.firstWindow();
+await win.setViewportSize({ width: 1280, height: 760 }).catch(() => {});
+await win.waitForTimeout(1500);
+await win.evaluate(() => document.querySelectorAll('.modal-wrap').forEach((m) => m.remove()));
+await win.click('#btnLibrary');
+await win.waitForTimeout(3000);
+await win.screenshot({ path: OUT + '/' + (process.argv[2] || 'libbig') + '.png' });
+const proc = app.process(); proc.kill('SIGKILL'); process.exit(0);

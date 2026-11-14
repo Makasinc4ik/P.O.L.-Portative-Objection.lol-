@@ -1,0 +1,20 @@
+# зависимости и сборки
+node_modules/
+android/node_modules/
+android/build/
+dist/
+dist32/
+dist-linux/
+dist-mac/
+dist-android/
+
+# ключ подписи Android — хранится отдельно, в репозиторий не кладётся
+android/release.keystore
+*.keystore
+*.jks
+android/BUILD.md
+
+# тестовые данные (библиотеки, файлы тестеров, снимки) — только сами тесты
+test/*
+!test/*.mjs
+android/keystore.pass

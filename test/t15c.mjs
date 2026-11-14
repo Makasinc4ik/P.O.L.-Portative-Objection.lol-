@@ -1,0 +1,40 @@
+import { _electron as electron } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+import fs from 'fs';
+const ROOT = '/home/claude/oo';
+const app = await electron.launch({ executablePath: process.env.EL || (ROOT + '/node_modules/electron/dist/electron'), args: ['--no-sandbox', ROOT], env: { ...process.env, OO_LIBRARY: '/tmp/undoLib' } });
+const win = await app.firstWindow();
+const logs = [];
+win.on('pageerror', (e) => logs.push('[pageerror] ' + e.stack));
+await win.setViewportSize({ width: 1500, height: 950 }).catch(() => {});
+await win.waitForTimeout(2500);
+for (let i = 0; i < 3; i++) { await win.keyboard.press('Escape'); await win.waitForTimeout(150); }
+await win.evaluate(() => { [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Библиотека')?.click(); });
+await win.waitForTimeout(1200);
+const R = {};
+R.pick = await win.evaluate(async () => {
+  const L = window.Assets.Lib;
+  const c = L.list('characters').find((x) => !x.isPreset && x.poses?.[0]?.idleImageUrl && L.isLocal(x.poses[0].idleImageUrl)) || L.list('characters').find((x) => !x.isPreset);
+  const files = [c.poses?.[0]?.idleImageUrl, c.iconUrl].filter(Boolean);
+  window.__c = { id: c.id, name: c.name, folder: c.folder || '', files };
+  await window.api.lib.setFolder('characters', [c.id], 'ТестПапка');
+  await L.load();
+  return { name: c.name, folderAfterMove: L.get('characters', c.id).folder, files };
+});
+await win.keyboard.press('Control+z');
+await win.waitForTimeout(800);
+R.afterUndoMove = await win.evaluate(() => window.Assets.Lib.get('characters', __c.id)?.folder || '');
+const libFiles0 = await win.evaluate(() => { const c = window.Assets.Lib.get('characters', __c.id); return [c.poses?.[0]?.idleImageUrl, c.iconUrl].filter(Boolean); });
+R.filesBefore = libFiles0.map((f) => fs.existsSync('/tmp/undoLib/' + f));
+await win.evaluate(async () => { await window.Assets.Lib.remove('characters', __c.id); });
+R.removed = await win.evaluate(() => !window.Assets.Lib.get('characters', __c.id));
+R.filesAfterRemove = __dummy();
+function __dummy() { return null; }
+const libFiles = libFiles0;
+R.filesExistAfterRemove = libFiles.map((f) => fs.existsSync('/tmp/undoLib/' + f));
+await win.keyboard.press('Control+z');
+await win.waitForTimeout(1000);
+R.afterUndoRemove = await win.evaluate(() => !!window.Assets.Lib.get('characters', __c.id));
+R.filesExistAfterUndo = libFiles.map((f) => fs.existsSync('/tmp/undoLib/' + f));
+R.toast = await win.evaluate(() => [...document.querySelectorAll('.toast')].map((t) => t.textContent));
+console.log(JSON.stringify(R), logs.join('\n'));
+await app.close();
