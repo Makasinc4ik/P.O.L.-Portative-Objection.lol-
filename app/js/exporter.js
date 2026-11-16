@@ -125,7 +125,7 @@
     }
     stopMusic() { this.musicId = null; this.fading = false; this.events.push({ t: this.t(), type: 'music_stop' }); }
     fadeOutMusic(ms = 1000) { if (this.musicId == null) return; this.fading = true; this.events.push({ t: this.t(), type: 'music_fadeout', ms }); }
-    fadeInMusic(ms = 1000) { this.events.push({ t: this.t(), type: 'music_fadein', ms }); }
+    fadeInMusic(ms = 1000) { this.fading = false; this.events.push({ t: this.t(), type: 'music_fadein', ms }); }
     stopAll() { /* в записи не нужно */ }
   }
 
@@ -175,12 +175,11 @@
       } else if (e.type === 'music_fadeout') {
         if (!cur) continue;
         const d = e.ms / 1000;
-        cur.env.push([t, null, 'set'], [t + d, 0, 'ramp']);
-        endMusic(t + d);
+        cur.env.push([t, null, 'set'], [t + d, 0, 'ramp']); // дальше без звука, пока не будет [#bgmfi]
       } else if (e.type === 'music_fadein') {
         if (!cur) continue;
         const d = e.ms / 1000;
-        cur.env.push([t, 0, 'set'], [t + d, cur.vol, 'ramp']);
+        cur.env.push([t, null, 'set'], [t + d, cur.vol, 'ramp']);
       }
     }
     // громкость дорожки музыки в момент t (как setValueAtTime + linearRampToValueAtTime)

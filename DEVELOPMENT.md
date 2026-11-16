@@ -42,6 +42,20 @@ cd android && npm install && bash build-android.sh   # APK → dist-android/
 
 Программа (Файл → «Проверить обновления…», а также сама при запуске раз в день) читает `https://api.github.com/repos/Makasinc4ik/P.O.L.-Portative-Objection.lol-/releases`. Учитываются выпуски, которые не черновики и не пре-релизы; версия берётся из тега (`v1.1.0` или `1.1.0`) и сравнивается с `version` в `package.json`. Чтобы кнопка «Скачать» открывала файл нужной системы, к выпуску прикрепляются архивы с обычными именами: `…Win64…`, `…Win32…`, `…Linux64….AppImage`, `…MacIntel….zip`, `…Android….apk`.
 
+## Видеоуроки
+
+Кнопка «?» в программе читает `tutorials.json` из корня ветки `main` этого репозитория (если GitHub недоступен — копию `app/tutorials.json` внутри программы). Формат:
+
+```json
+{
+  "videos": [
+    { "title": "Первая сцена за 5 минут", "title_en": "First scene in 5 minutes", "url": "https://www.youtube.com/watch?v=…", "note": "по желанию", "note_en": "optional" }
+  ]
+}
+```
+
+Достаточно отредактировать файл на GitHub — у всех установленных версий список обновится при следующем открытии окна.
+
 ## Права
 
 Код программы — авторов проекта. Персонажи, фоны и музыка Ace Attorney принадлежат Capcom; в репозитории их нет — программа скачивает их с objection.lol на компьютер пользователя для личного использования. `app/vendor/mp4-muxer.js` — библиотека [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) (лицензия MIT, см. `mp4-muxer.LICENSE.txt`).

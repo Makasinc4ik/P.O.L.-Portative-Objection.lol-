@@ -895,7 +895,7 @@
       editBox);
     const m = modal({ title: tx('Библиотека ресурсов'), wide: true, body: [body], onClose: () => { document.querySelectorAll('.audio-player').forEach((p) => p._audio && p._audio.pause()); if (previewPlayer) previewPlayer.destroy(); ctx.audio.stopAll(); ctx.onLibraryChanged && ctx.onLibraryChanged(); } });
     m.el.insertBefore(tabsEl, m.body);
-    m.body.style.overflow = 'hidden';
+    if (!document.body.classList.contains('mobile')) m.body.style.overflow = 'hidden'; // на телефоне прокручивается всё окно целиком
 
     // Ctrl+Z — отменить последнее действие в библиотеке (удаление, перенос в папку, изменение, папки)
     const onUndoKey = async (e) => {
@@ -1170,6 +1170,7 @@
       editBox.querySelectorAll('.audio-player').forEach((p) => p._audio && p._audio.pause());
       editBox.innerHTML = '';
       editBox.classList.toggle('open', !!draft);
+      if (draft && document.body.classList.contains('mobile')) { const mb = editBox.closest('.modal-body'); if (mb) mb.scrollTop = 0; }
       if (!draft) {
         editBox.append(h('div', { class: 'muted', style: { padding: '20px 4px', lineHeight: 1.6 } }, tx('Здесь редактируется выбранный слева ресурс.')));
         return;

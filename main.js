@@ -130,6 +130,8 @@ function createWindow() {
       nodeIntegration: false,
       backgroundThrottling: false,
       autoplayPolicy: 'no-user-gesture-required',
+      // языки системы (для выбора языка интерфейса при первом запуске)
+      additionalArguments: ['--oo-langs=' + (() => { try { return (app.getPreferredSystemLanguages ? app.getPreferredSystemLanguages() : [app.getLocale()]).join(','); } catch (e) { return ''; } })()],
     },
   });
   win.setMenu(null);
@@ -1192,6 +1194,7 @@ function registerIpc() {
   ipcMain.handle('app:launchFile', () => { const f = launchFile; launchFile = null; return f; });
   ipcMain.handle('app:openExternal', (e, url) => { if (/^https?:/.test(url)) shell.openExternal(url); });
   ipcMain.handle('app:checkUpdate', () => checkUpdate());
+  ipcMain.handle('app:tutorials', () => fetchTutorials());
   // Выбор файлов системным окном. Раньше было <input type=file accept=…>: в Windows список типов из MIME
   // и расширений иногда скрывал подходящие файлы. Здесь есть и «Все файлы».
   ipcMain.handle('dialog:pickFiles', async (e, kind, multiple) => {
@@ -1244,6 +1247,17 @@ async function checkUpdate() {
   } finally { clearTimeout(timer); }
 }
 global.__ooVerCmp = verCmp;
+// Список видеоуроков: tutorials.json в репозитории (обновляется без выпуска новой версии)
+async function fetchTutorials() {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  try {
+    const r = await fetch(process.env.OO_TUTORIALS_URL || `https://raw.githubusercontent.com/${UPDATE_REPO}/main/tutorials.json`, { headers: { 'user-agent': 'ObjectionOffline/' + app.getVersion() }, signal: ctl.signal });
+    if (!r.ok) return null;
+    const j = JSON.parse(await r.text());
+    return j && Array.isArray(j.videos) ? { source: 'online', videos: j.videos } : null;
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
 
 // ---------- Старт ----------
 const gotLock = app.requestSingleInstanceLock();

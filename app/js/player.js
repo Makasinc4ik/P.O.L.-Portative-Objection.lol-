@@ -29,7 +29,41 @@
     const p = list[0];
     return { list, fadeInMs: Math.max(0, Number(p.fadeInMs) || 0), fadeOutMs: Math.max(0, Number(p.fadeOutMs) || 0), sig: list.map(effSig).join('|') };
   }
-  function cssOne(e, k) {
+  // Резкость: SVG-фильтр (свёртка 3×3), на холсте подключается как url(#…)
+  function sharpenUrl(level) {
+    const n = Math.max(0, Math.min(100, Math.round(level / 5) * 5));
+    if (!n) return null;
+    const id = 'ooSharp' + n;
+    if (!document.getElementById(id)) {
+      let svg = document.getElementById('ooFxDefs');
+      const NS = 'http://www.w3.org/2000/svg';
+      if (!svg) { svg = document.createElementNS(NS, 'svg'); svg.id = 'ooFxDefs'; svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.style.cssText = 'position:absolute;width:0;height:0;pointer-events:none'; document.body.append(svg); }
+      const a = (n / 100) * 1.2;
+      const f = document.createElementNS(NS, 'filter'); f.id = id; f.setAttribute('color-interpolation-filters', 'sRGB');
+      const c = document.createElementNS(NS, 'feConvolveMatrix'); c.setAttribute('order', '3'); c.setAttribute('preserveAlpha', 'true');
+      c.setAttribute('kernelMatrix', `0 ${-a} 0 ${-a} ${1 + 4 * a} ${-a} 0 ${-a} 0`);
+      f.append(c); svg.append(f);
+    }
+    return `url(#${id})`;
+  }
+  // Зерно: несколько заранее посчитанных плиток шума, меняются ~12 раз в секунду
+  let noiseTiles = null;
+  function noiseTile(i) {
+    if (!noiseTiles) {
+      noiseTiles = [];
+      for (let t = 0; t < 6; t++) {
+        const c = document.createElement('canvas'); c.width = c.height = 160;
+        const x = c.getContext('2d'); const d = x.createImageData(160, 160);
+        for (let j = 0; j < d.data.length; j += 4) { const v = Math.random() * 255; d.data[j] = d.data[j + 1] = d.data[j + 2] = v; d.data[j + 3] = 255; }
+        x.putImageData(d, 0, 0); noiseTiles.push(c);
+      }
+    }
+    return noiseTiles[((i % noiseTiles.length) + noiseTiles.length) % noiseTiles.length];
+  }
+  const GRAIN_MS = 83;
+  // Фильтры, которые считаются после отрисовки слоя (наложения, виньетка, зерно, радиальное и краевое размытие)
+  const POST_TYPES = ['tint', 'vignette', 'grain', 'blur-radial', 'blur-edges'];
+  function cssOne(e, k, sc = 1) {
     const amount = Number(e.amount ?? 100);
     const a = amount * k;
     const lin = 100 + (amount - 100) * k;
@@ -42,6 +76,8 @@
       case 'brightness': return `brightness(${lin}%)`;
       case 'contrast': return `contrast(${lin}%)`;
       case 'saturate': return `saturate(${lin}%)`;
+      case 'blur': return a > 0 ? `blur(${(a * sc).toFixed(2)}px)` : null;
+      case 'sharpen': return sharpenUrl(a);
       default: return null;
     }
   }
@@ -1151,7 +1187,7 @@
         if (st.bubble.shake && now - st.bubble.start < BUBBLE_SHAKE_MS + 20) return null;
         p.push('u', bid(st.bubble.img.frameAt(now - st.bubble.start, false)), st.bubble.fullscreen ? 1 : 0);
       }
-      if (st.filter) p.push('f', st.filter.sig, (st.filterK ?? 1).toFixed(3));
+      if (st.filter) p.push('f', st.filter.sig, (st.filterK ?? 1).toFixed(3), st.filter.list.some((e) => e.type === 'grain') ? Math.floor(now / GRAIN_MS) : '');
       if (st.popupOut) return null; // картинка гаснет
       if (st.popup && st.popup.img) {
         const fx = pfx(st.popup);
@@ -1202,14 +1238,17 @@
       }
       const ov = st.overlay && st.overlay.a > 0 ? st.overlay : null;
       const drawOverlay = (full) => { g.fillStyle = hexA(ov.color, Math.min(1, ov.a)); if (full) g.fillRect(0, 0, W, H); else g.fillRect(-W, -H, W * 3, H * 3); };
+      this.fxNow = now;
       const filter = st.filter && (st.filterK ?? 1) > 0 ? this.cssFilter(st.filter, st.filterK ?? 1) : null;
       // слой сцены с фильтрами: bit — 1 (фон и стол) или место персонажа
       const layer = (bit, fn) => {
         if (!filter) { fn(); return; }
         const css = filter.cssFor(bit);
-        const tints = filter.tintsFor(bit);
-        if (!tints.length) { if (css) g.filter = css; fn(); g.filter = 'none'; return; }
-        this.drawTinted(css, tints, fn);
+        const ops = filter.opsFor(bit);
+        // размытие фона: под ним тот же фон без размытия, иначе края кадра темнеют (за краем пусто)
+        const under = bit === 1 && css && css.includes('blur(');
+        if (!ops.length) { if (under) fn(); if (css) g.filter = css; fn(); g.filter = 'none'; return; }
+        this.drawPost(css, ops, fn, under);
       };
       // при тряске края кадра раньше открывали чёрные полосы (особенно заметно в 9:16) —
       // подкладываем неподвижный фон со столом, сдвинутая сцена рисуется поверх
@@ -1418,46 +1457,94 @@
     // Набор фильтров → CSS-строка и цветные наложения для каждого слоя (фон/стол — бит 1, персонаж — бит места)
     cssFilter(set, k = 1) {
       const cache = new Map();
+      const sc = this.H / 720; // размеры (радиус размытия) заданы для 720p
+      const pct = (e, d) => Math.max(0, Math.min(100, Number(e.amount ?? d))) / 100 * k;
       const forBit = (bit) => {
         let r = cache.get(bit);
         if (r) return r;
-        const css = []; const tints = [];
+        const css = []; const ops = [];
         for (const e of set.list) {
           if (!(normTarget(e.target) & bit)) continue;
-          if (e.type === 'tint') { const op = Math.max(0, Math.min(100, Number(e.amount ?? 50))) / 100 * k; if (op > 0) tints.push({ color: e.color || '#ff8800', blend: blendOf(e.blend || 'multiply'), alpha: op }); continue; }
-          const c = cssOne(e, k);
-          if (c) css.push(c);
+          switch (e.type) {
+            case 'tint': { const op = pct(e, 50); if (op > 0) ops.push({ kind: 'tint', color: e.color || '#ff8800', blend: blendOf(e.blend || 'multiply'), alpha: op }); continue; }
+            case 'vignette': { const op = pct(e, 60); if (op > 0) ops.push({ kind: 'vignette', color: e.color || '#000000', alpha: op }); continue; }
+            case 'grain': { const op = pct(e, 30); if (op > 0) ops.push({ kind: 'grain', alpha: op }); continue; }
+            case 'blur-radial': { const op = pct(e, 40); if (op > 0) ops.push({ kind: 'zoom', s: op * 0.12 }); continue; }
+            case 'blur-edges': { const op = pct(e, 60); if (op > 0) ops.push({ kind: 'edges', r: op * 16 * sc }); continue; }
+            default: { const c = cssOne(e, k, sc); if (c) css.push(c); }
+          }
         }
-        r = { css: css.length ? css.join(' ') : null, tints };
+        r = { css: css.length ? css.join(' ') : null, ops };
         cache.set(bit, r);
         return r;
       };
-      return { cssFor: (bit) => forBit(bit).css, tintsFor: (bit) => forBit(bit).tints };
+      return { cssFor: (bit) => forBit(bit).css, opsFor: (bit) => forBit(bit).ops };
     }
 
-    // Слой с цветным наложением: рисуется отдельно, закрашивается в своём режиме наложения и обрезается по своей форме
-    drawTinted(css, tints, fn) {
+    // Слой с фильтрами «после отрисовки»: рисуется в отдельный холст, обрабатывается и кладётся на сцену.
+    // Цвет (наложение, виньетка, зерно) не выходит за контур слоя; размытия выходят за него, как обычное размытие.
+    drawPost(css, ops, fn, under = false) {
       const main = this.g;
       const cw = main.canvas.width; const chh = main.canvas.height;
       const mk = (c) => { if (!c) c = document.createElement('canvas'); if (c.width !== cw || c.height !== chh) { c.width = cw; c.height = chh; } return c; };
-      this.tintA = mk(this.tintA); this.tintB = mk(this.tintB);
-      const A = this.tintA.getContext('2d'); const B = this.tintB.getContext('2d');
-      A.setTransform(1, 0, 0, 1, 0, 0); A.globalAlpha = 1; A.globalCompositeOperation = 'source-over'; A.filter = 'none'; A.clearRect(0, 0, cw, chh);
+      this.fxA = mk(this.fxA); this.fxB = mk(this.fxB); this.fxC = mk(this.fxC);
+      const A = this.fxA.getContext('2d'); const B = this.fxB.getContext('2d'); const C = this.fxC.getContext('2d');
+      const reset = (x) => { x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; };
+      reset(A); A.clearRect(0, 0, cw, chh);
       A.setTransform(main.getTransform());
       A.globalAlpha = main.globalAlpha;
       A.imageSmoothingEnabled = main.imageSmoothingEnabled;
-      if (css) A.filter = css;
       this.g = A;
-      try { fn(); } finally { this.g = main; }
-      A.setTransform(1, 0, 0, 1, 0, 0); A.filter = 'none'; A.globalAlpha = 1;
-      B.setTransform(1, 0, 0, 1, 0, 0); B.globalAlpha = 1; B.filter = 'none';
-      B.globalCompositeOperation = 'copy'; B.drawImage(this.tintA, 0, 0);
-      for (const t of tints) { B.globalCompositeOperation = t.blend; B.globalAlpha = Math.min(1, t.alpha); B.fillStyle = t.color; B.fillRect(0, 0, cw, chh); }
-      B.globalAlpha = 1; B.globalCompositeOperation = 'destination-in'; B.drawImage(this.tintA, 0, 0);
-      B.globalCompositeOperation = 'source-over';
+      try { if (under) fn(); if (css) A.filter = css; fn(); } finally { this.g = main; }
+      reset(A); reset(B); reset(C);
+      B.globalCompositeOperation = 'copy'; B.drawImage(this.fxA, 0, 0); B.globalCompositeOperation = 'source-over';
+      const D = Math.hypot(cw, chh) / 2;
+      // цвет поверх слоя, обрезанный по его текущей форме
+      const colorOp = (paint) => {
+        C.globalCompositeOperation = 'copy'; C.drawImage(this.fxB, 0, 0); C.globalCompositeOperation = 'source-over';
+        paint(B);
+        reset(B);
+        B.globalCompositeOperation = 'destination-in'; B.drawImage(this.fxC, 0, 0); B.globalCompositeOperation = 'source-over';
+      };
+      for (const o of ops) {
+        if (o.kind === 'tint') colorOp((x) => { x.globalCompositeOperation = o.blend; x.globalAlpha = Math.min(1, o.alpha); x.fillStyle = o.color; x.fillRect(0, 0, cw, chh); });
+        else if (o.kind === 'vignette') colorOp((x) => {
+          const g = x.createRadialGradient(cw / 2, chh / 2, D * (0.7 - 0.45 * o.alpha), cw / 2, chh / 2, D * 0.92);
+          const rgb = /^#?([0-9a-f]{6})$/i.exec(o.color || '') ? o.color : '#000000';
+          g.addColorStop(0, rgb + '00'); g.addColorStop(1, rgb + 'ff');
+          x.globalAlpha = Math.min(1, 0.45 + 0.55 * o.alpha); x.fillStyle = g; x.fillRect(0, 0, cw, chh);
+        });
+        else if (o.kind === 'grain') colorOp((x) => {
+          const tile = noiseTile(Math.floor((this.fxNow || 0) / GRAIN_MS));
+          const pat = x.createPattern(tile, 'repeat');
+          const z = Math.max(1, chh / 720);
+          pat.setTransform(new DOMMatrix([z, 0, 0, z, 0, 0]));
+          x.globalCompositeOperation = 'overlay'; x.globalAlpha = Math.min(1, o.alpha * 0.9); x.fillStyle = pat; x.fillRect(0, 0, cw, chh);
+        });
+        else if (o.kind === 'zoom') {
+          // радиальное размытие: усреднение копий слоя, растянутых от центра
+          C.globalCompositeOperation = 'copy'; C.drawImage(this.fxB, 0, 0); C.globalCompositeOperation = 'source-over';
+          const n = 12;
+          for (let i = 1; i <= n; i++) {
+            const z = 1 + (o.s * i) / n;
+            B.globalAlpha = 1 / (i + 1);
+            B.drawImage(this.fxC, (cw - cw * z) / 2, (chh - chh * z) / 2, cw * z, chh * z);
+          }
+          reset(B);
+        } else if (o.kind === 'edges') {
+          // размытие по краям: размытая копия, видимая только у краёв кадра
+          C.globalCompositeOperation = 'copy'; C.filter = `blur(${o.r.toFixed(2)}px)`; C.drawImage(this.fxB, 0, 0); C.filter = 'none';
+          const g = C.createRadialGradient(cw / 2, chh / 2, D * 0.35, cw / 2, chh / 2, D * 0.95);
+          g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+          C.globalCompositeOperation = 'destination-in'; C.fillStyle = g; C.fillRect(0, 0, cw, chh);
+          reset(C);
+          B.drawImage(this.fxC, 0, 0); // у самого края размытая копия полупрозрачна — там просвечивает резкая
+          reset(B);
+        }
+      }
       main.save();
-      main.setTransform(1, 0, 0, 1, 0, 0); main.globalAlpha = 1; main.filter = 'none';
-      main.drawImage(this.tintB, 0, 0);
+      main.setTransform(1, 0, 0, 1, 0, 0); main.globalAlpha = 1; main.filter = 'none'; main.globalCompositeOperation = 'source-over';
+      main.drawImage(this.fxB, 0, 0);
       main.restore();
     }
 
@@ -2163,5 +2250,5 @@
 
   Player.instances = new Set();
   window.Player = Player;
-  window.PlayerUtil = { BLENDS, effectsOf, aspectOf, computeBackgrounds, sceneCharacters, applyAlias, findPair, POPUPS, MAX_PAIR, ALL_CHARS, normTarget, pairLimit, guessDesign, DESIGN_ASPECTS };
+  window.PlayerUtil = { BLENDS, POST_TYPES, effectsOf, aspectOf, computeBackgrounds, sceneCharacters, applyAlias, findPair, POPUPS, MAX_PAIR, ALL_CHARS, normTarget, pairLimit, guessDesign, DESIGN_ASPECTS };
 })();

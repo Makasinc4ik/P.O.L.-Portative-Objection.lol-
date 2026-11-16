@@ -11,11 +11,9 @@ hook(win);
 await win.setViewportSize({ width: 1500, height: 950 }).catch(() => {});
 await win.waitForTimeout(2500);
 for (let i = 0; i < 3; i++) { await win.keyboard.press('Escape'); await win.waitForTimeout(150); }
-// переключение через меню «Файл»
-await win.locator('[data-menu="file"]').click();
-await win.waitForTimeout(200);
-const label = await win.locator('#menuLang').textContent();
-await Promise.all([win.waitForEvent('load').catch(() => {}), win.locator('#menuLang').click()]);
+// переключение кнопкой в шапке
+const label = await win.locator('#btnLang').textContent();
+await Promise.all([win.waitForEvent('load').catch(() => {}), win.locator('#btnLang').click()]);
 await win.waitForTimeout(3500);
 for (let i = 0; i < 3; i++) { await win.keyboard.press('Escape'); await win.waitForTimeout(150); }
 const R = { label, lang: await win.evaluate(() => window.OO_LANG) };
@@ -49,8 +47,7 @@ await win.locator('#btnScenes').click(); await shot('scenes'); await win.keyboar
 // сообщение из «главного процесса»
 R.mainMsg = await win.evaluate(async () => { try { await window.api.download.byCode('characters', '', ''); return 'no error'; } catch (e) { return e.message; } });
 // назад на русский
-await win.locator('[data-menu="file"]').click();
-await Promise.all([win.waitForEvent('load').catch(() => {}), win.locator('#menuLang').click()]);
+await Promise.all([win.waitForEvent('load').catch(() => {}), win.locator('#btnLang').click()]);
 await win.waitForTimeout(3000);
 R.back = await win.evaluate(() => ({ lang: window.OO_LANG, btn: document.getElementById('btnLibrary').textContent }));
 console.log(JSON.stringify(R, null, 1));

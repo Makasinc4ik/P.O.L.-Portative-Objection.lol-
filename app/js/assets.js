@@ -464,23 +464,26 @@ class AudioEngine {
       this.music = null;
     }
   }
+  // плавно выключить: музыка дальше идёт без звука (как на сайте), [#bgmfi] плавно возвращает её
   fadeOutMusic(ms = 1500) {
     const m = this.music;
     if (!m) return;
     m.fading = true;
     const t = this.ctx.currentTime;
-    m.gain.gain.cancelScheduledValues(t);
-    m.gain.gain.setValueAtTime(m.gain.gain.value, t);
-    m.gain.gain.linearRampToValueAtTime(0, t + ms / 1000);
-    setTimeout(() => { if (this.music === m) this.stopMusic(); else try { m.src.stop(); } catch (e) { /* */ } }, ms + 50);
+    const g = m.gain.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(0, t + ms / 1000);
   }
   fadeInMusic(ms = 1500) {
     const m = this.music;
     if (!m) return;
+    m.fading = false;
     const t = this.ctx.currentTime;
-    m.gain.gain.cancelScheduledValues(t);
-    m.gain.gain.setValueAtTime(0, t);
-    m.gain.gain.linearRampToValueAtTime(m.vol, t + ms / 1000);
+    const g = m.gain.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(m.vol, t + ms / 1000);
   }
   stopAll() { this.stopMusic(); this.stopSounds(); }
 }

@@ -1,0 +1,20 @@
+{
+ "Язык интерфейса": "Interface language",
+ "Обучение и видеоуроки": "Tutorials and video lessons",
+ "Виньетка": "Vignette",
+ "Зерно / шум": "Grain / noise",
+ "Размытие": "Blur",
+ "Радиальное размытие": "Radial blur",
+ "Размытие по краям": "Edge blur",
+ "Резкость": "Sharpness",
+ "Радиус, пикс. (для 720p)": "Radius, px (at 720p)",
+ "Копия пары с теми же персонажами — в ней можно поменять положение, не трогая остальные кадры": "A copy of the pair with the same characters — positions can be changed in it without affecting other frames",
+ "⧉ Копия пары для этого кадра": "⧉ Copy of the pair for this frame",
+ "{0}: фильтр, которого нет на сайте (контрастность, насыщенность, «Сепия + негатив», наложение, виньетка, зерно, размытие, резкость)": "{0}: a filter the site does not have (contrast, saturation, «Sepia + negative», color blend, vignette, grain, blur, sharpness)",
+ "Копия пары (то же самое, отдельно настраивается)": "Copy of the pair (same setup, adjusted separately)",
+ "Загрузка списка…": "Loading the list…",
+ "Обучение": "Tutorials",
+ "Страница программы на GitHub": "Program page on GitHub",
+ "Видеоуроки пока не добавлены — они появятся в этом окне.": "No video lessons yet — they will appear in this window.",
+ "Список из программы (нет связи с GitHub — новых уроков может не быть).": "Built-in list (GitHub is unreachable — newer lessons may be missing)."
+}

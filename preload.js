@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   platform: 'electron',
+  sysLangs: ((process.argv.find((x) => x.startsWith('--oo-langs=')) || '').slice(11)).split(',').filter(Boolean),
   arch: process.arch,
   lib: {
     get: () => ipcRenderer.invoke('lib:get'),
@@ -90,5 +91,6 @@ contextBridge.exposeInMainWorld('api', {
   version: () => ipcRenderer.invoke('app:version'),
   setLang: (l) => ipcRenderer.invoke('app:setLang', l),
   checkUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
+  tutorials: () => ipcRenderer.invoke('app:tutorials'),
   onOpenFile: (cb) => ipcRenderer.on('open-file', (e, p) => cb(p)),
 });

@@ -108,6 +108,7 @@ window.api = {
   version: () => invoke('app:version'),
   setLang: (l) => invoke('app:setLang', l),
   checkUpdate: () => invoke('app:checkUpdate'),
+  tutorials: () => invoke('app:tutorials'),
   onOpenFile: (cb) => onSend('open-file', cb),
 };
 window.Buffer = window.Buffer || Buffer;

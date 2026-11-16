@@ -1025,7 +1025,8 @@
 
     // фильтры: основной (f.effect — как на сайте) и дополнительные (f.extraEffects); плавность общая и хранится в основном
     const effList = window.PlayerUtil.effectsOf(f);
-    const effDefaults = { 'hue-rotate': 180, contrast: 150, saturate: 200, tint: 50 };
+    const effDefaults = { 'hue-rotate': 180, contrast: 150, saturate: 200, tint: 50, blur: 4, 'blur-radial': 40, 'blur-edges': 60, sharpen: 50, vignette: 60, grain: 30 };
+    const PCT_TYPES = ['tint', 'blur-radial', 'blur-edges', 'sharpen', 'vignette', 'grain'];
     const editEffects = (fn) => edit((fr) => {
       const L = window.PlayerUtil.effectsOf(fr).map((e) => ({ ...e }));
       const fi = fr.effect && fr.effect.fadeInMs; const fo = fr.effect && fr.effect.fadeOutMs;
@@ -1035,18 +1036,19 @@
       fr.effect = L[0] || null;
       if (L.length > 1) fr.extraEffects = L.slice(1); else delete fr.extraEffects;
     }, { rerenderInspector: true });
-    const effTypes = [['grayscale', tx('Чёрно-белый')], ['sepia', tx('Сепия')], ['invert', tx('Негатив')], ['sepia-invert', tx('Сепия + негатив')], ['hue-rotate', tx('Сдвиг оттенка')], ['brightness', tx('Яркость')], ['contrast', tx('Контрастность')], ['saturate', tx('Насыщенность')], ['tint', tx('Цвет с наложением')]];
+    const effTypes = [['grayscale', tx('Чёрно-белый')], ['sepia', tx('Сепия')], ['invert', tx('Негатив')], ['sepia-invert', tx('Сепия + негатив')], ['hue-rotate', tx('Сдвиг оттенка')], ['brightness', tx('Яркость')], ['contrast', tx('Контрастность')], ['saturate', tx('Насыщенность')], ['tint', tx('Цвет с наложением')], ['vignette', tx('Виньетка')], ['grain', tx('Зерно / шум')], ['blur', tx('Размытие')], ['blur-radial', tx('Радиальное размытие')], ['blur-edges', tx('Размытие по краям')], ['sharpen', tx('Резкость')]];
     const effRow = (eff, idx) => {
       const typeSel = h('select', { class: 'input', onchange: (e) => editEffects((L) => {
         const t = e.target.value;
         const n = { target: L[idx].target ?? 63, type: t, amount: effDefaults[t] ?? 100 };
         if (t === 'tint') { n.color = L[idx].color || '#ff8800'; n.blend = L[idx].blend || 'multiply'; }
+        if (t === 'vignette') n.color = '#000000';
         L[idx] = n;
       }) }, effTypes.map(([v, l]) => h('option', { value: v }, l)));
       typeSel.value = eff.type;
-      const amount = h('input', { class: 'input', type: 'number', min: eff.type === 'tint' ? 0 : undefined, max: eff.type === 'tint' ? 100 : undefined, value: eff.amount ?? (effDefaults[eff.type] ?? 100), onchange: (e) => editEffects((L) => { L[idx].amount = Number(e.target.value) || 0; }) });
-      const amountLabel = eff.type === 'hue-rotate' ? tx('Градусы') : eff.type === 'tint' ? tx('Непрозрачность, %') : ['brightness', 'contrast', 'saturate'].includes(eff.type) ? tx('Уровень, % (100 — без изменений)') : tx('Сила, %');
-      const color = eff.type === 'tint' ? h('input', { class: 'input', type: 'color', value: normHex(eff.color || '#ff8800'), style: { height: '34px', padding: '2px' }, onchange: (e) => editEffects((L) => { L[idx].color = e.target.value; }) }) : null;
+      const amount = h('input', { class: 'input', type: 'number', min: PCT_TYPES.includes(eff.type) || eff.type === 'blur' ? 0 : undefined, max: PCT_TYPES.includes(eff.type) ? 100 : eff.type === 'blur' ? 60 : undefined, step: eff.type === 'blur' ? 0.5 : undefined, value: eff.amount ?? (effDefaults[eff.type] ?? 100), onchange: (e) => editEffects((L) => { L[idx].amount = Number(e.target.value) || 0; }) });
+      const amountLabel = eff.type === 'hue-rotate' ? tx('Градусы') : eff.type === 'tint' ? tx('Непрозрачность, %') : eff.type === 'blur' ? tx('Радиус, пикс. (для 720p)') : ['brightness', 'contrast', 'saturate'].includes(eff.type) ? tx('Уровень, % (100 — без изменений)') : tx('Сила, %');
+      const color = eff.type === 'tint' || eff.type === 'vignette' ? h('input', { class: 'input', type: 'color', value: normHex(eff.color || (eff.type === 'vignette' ? '#000000' : '#ff8800')), style: { height: '34px', padding: '2px' }, onchange: (e) => editEffects((L) => { L[idx].color = e.target.value; }) }) : null;
       const blend = eff.type === 'tint' ? h('select', { class: 'input', onchange: (e) => editEffects((L) => { L[idx].blend = e.target.value; }) }, window.OOBlendOptions().map(([v, l]) => h('option', { value: v }, l))) : null;
       if (blend) blend.value = eff.blend || 'multiply';
       // к чему применить: фон и каждый участник пары отдельно (битовая маска, как на сайте)
@@ -1064,7 +1066,7 @@
         h('button', { class: 'btn small', title: tx('Убрать фильтр'), onclick: () => editEffects((L) => { L.splice(idx, 1); }) }, '✕'));
       return h('div', { class: 'eff-item' },
         h('div', { class: 'row' }, field(effList.length > 1 ? tx`Фильтр ${idx + 1}` : tx('Тип'), typeSel), field(amountLabel, amount), tools),
-        color ? h('div', { class: 'row' }, field(tx('Цвет'), color), field(tx('Режим наложения'), blend)) : null,
+        color ? h('div', { class: 'row' }, field(tx('Цвет'), color), blend ? field(tx('Режим наложения'), blend) : h('div')) : null,
         field(tx('К чему'), target));
     };
     const effAdd = h('button', { class: 'btn small', onclick: () => editEffects((L) => { L.push({ type: L.length ? 'contrast' : 'grayscale', amount: L.length ? 150 : 100, target: 63 }); }) }, effList.length ? tx('＋ Ещё фильтр') : tx('＋ Добавить фильтр'));
@@ -1136,6 +1138,13 @@
         effList.length ? h('div', { class: 'row' }, field(tx('Плавно наложить, мс'), effIn), field(tx('Плавно снять после, мс'), effOut)) : null),
       h('div', { class: 'section' }, h('h4', null, tx('Пара персонажей')),
         h('div', { class: 'row' }, field(tx('Пара'), pairSel), h('div', { class: 'field' }, h('button', { class: 'btn small', onclick: () => (pair ? openPairEditor(pair, f) : openSettings('pairs')) }, pair ? tx('Настроить эту пару…') : tx('Настроить пары…')))),
+        pair ? h('div', { class: 'row' }, h('button', { class: 'btn small', title: tx('Копия пары с теми же персонажами — в ней можно поменять положение, не трогая остальные кадры'), onclick: () => {
+          pushUndo();
+          const np = clonePair(pair);
+          f.pair = { ...(f.pair || {}), id: np.id };
+          markDirty(); App.player.setProject(App.project); renderFrames(); renderInspector(); showStill();
+          openPairEditor(np, f);
+        } }, tx('⧉ Копия пары для этого кадра'))) : null,
         pair ? h('div', { class: 'hint' }, tx('Позы участников и «Говорят все в паре» — в разделе «Поза» выше.')) : null),
       popupSection(f, actGet, actSet),
     ].filter(Boolean));
@@ -1490,7 +1499,7 @@
       if (f.wideSpot) add(i, tx`${at(i)}: своя стойка на широком фоне — на сайте персонажи встанут по-своему`);
       if (f.effect && (f.effect.fadeInMs || f.effect.fadeOutMs)) add(i, tx`${at(i)}: плавный фильтр — на сайте включится сразу`);
       if (Array.isArray(f.extraEffects) && f.extraEffects.some((e) => e && e.type)) add(i, tx`${at(i)}: несколько фильтров — на сайте будет только первый`);
-      if (window.PlayerUtil.effectsOf(f).some((e) => ['sepia-invert', 'contrast', 'saturate', 'tint'].includes(e.type))) add(i, tx`${at(i)}: фильтр контрастности, насыщенности, «Сепия + негатив» или цветное наложение — на сайте его нет`);
+      if (window.PlayerUtil.effectsOf(f).some((e) => !['grayscale', 'sepia', 'invert', 'hue-rotate', 'brightness'].includes(e.type))) add(i, tx`${at(i)}: фильтр, которого нет на сайте (контрастность, насыщенность, «Сепия + негатив», наложение, виньетка, зерно, размытие, резкость)`);
       if (f.popupFx && f.popupFx.blend) add(i, tx`${at(i)}: режим наложения картинки — на сайте его нет`);
       if (f.fade && f.fade.onlyThisFrame) add(i, tx`${at(i)}: затемнение «только на этот кадр» — на сайте останется`);
       if ((f.actions || []).some((a) => a.actionId === 7 && String(a.actionParam || '').startsWith('c'))) add(i, tx`${at(i)}: своя заставка — на сайте не покажется`);
@@ -1624,6 +1633,7 @@
             await savePreset('pairs', { name: name.trim(), pairs: JSON.parse(JSON.stringify(p.pairs || [])) });
             toast(tx('Пара сохранена в пресеты'));
           } }, '💾'),
+          h('button', { class: 'btn small', title: tx('Копия пары (то же самое, отдельно настраивается)'), onclick: () => { clonePair(p); markDirty(); renderPairs(); } }, '⧉'),
           h('button', { class: 'btn small danger', onclick: () => { App.project.pairs.splice(i, 1); markDirty(); renderPairs(); } }, '✕')));
       });
     };
@@ -1781,6 +1791,19 @@
       render();
       m = modal({ title, body, onClose: () => resolve(null) });
     });
+  }
+
+  // копия пары — сразу после исходной
+  function clonePair(p) {
+    const np = JSON.parse(JSON.stringify(p));
+    np.id = uuid();
+    const base = (p.name || tx('Пара')).replace(/ \(\d+\)$/, '');
+    let n = 2;
+    while (App.project.pairs.some((x) => x.name === `${base} (${n})`)) n++;
+    np.name = `${base} (${n})`;
+    const i = App.project.pairs.indexOf(p);
+    App.project.pairs.splice(i < 0 ? App.project.pairs.length : i + 1, 0, np);
+    return np;
   }
 
   // ---------- Редактор пары с предпросмотром ----------
@@ -2272,8 +2295,35 @@
     window.setUiLang(to);
   }
 
+  // ---------- Обучение: видеоуроки (список — app/tutorials.json и tutorials.json в репозитории на GitHub) ----------
+  async function showHelp() {
+    const list = h('div', { class: 'help-list' }, h('div', { class: 'muted' }, tx('Загрузка списка…')));
+    const m = modal({ title: tx('Обучение'), body: [list], foot: [h('button', { class: 'btn', onclick: () => window.api.openExternal(REPO_URL) }, tx('Страница программы на GitHub'))] });
+    let data = null;
+    try { data = window.api.tutorials ? await window.api.tutorials() : null; } catch (e) { /* */ }
+    if (!data) { try { const j = await (await fetch('tutorials.json', { cache: 'no-store' })).json(); data = { source: 'builtin', videos: j.videos || [] }; } catch (e) { /* */ } }
+    const en = window.OO_LANG === 'en';
+    const vids = (data && Array.isArray(data.videos) ? data.videos : []).filter((v) => v && v.url && /^https?:/i.test(v.url));
+    list.textContent = '';
+    if (!vids.length) {
+      list.append(h('p', null, tx('Видеоуроки пока не добавлены — они появятся в этом окне.')));
+      return m;
+    }
+    for (const v of vids) {
+      const title = (en && v.title_en) || v.title || v.url;
+      const note = (en && v.note_en) || v.note || '';
+      list.append(h('button', { class: 'help-item', onclick: () => window.api.openExternal(v.url) },
+        h('span', { class: 'help-play' }, '▶'),
+        h('span', { class: 'help-text' }, h('b', null, title), note ? h('span', { class: 'muted' }, note) : null)));
+    }
+    if (data && data.source === 'builtin') list.append(h('div', { class: 'hint' }, tx('Список из программы (нет связи с GitHub — новых уроков может не быть).')));
+    return m;
+  }
+  App.showHelp = showHelp;
+
   // ---------- Проверка обновлений (GitHub Releases) ----------
-  const RELEASES_URL = 'https://github.com/Makasinc4ik/P.O.L.-Portative-Objection.lol-/releases';
+  const REPO_URL = 'https://github.com/Makasinc4ik/P.O.L.-Portative-Objection.lol-';
+  const RELEASES_URL = REPO_URL + '/releases';
   function autoCheckUpdate() {
     if (!window.api.checkUpdate || localStorage.getItem('oo.updateAuto') === '0') return;
     const last = Number(localStorage.getItem('oo.updateChecked') || 0);
@@ -2389,7 +2439,8 @@
     App.player = new window.Player($('screen'), App.audio);
     bindUi();
     if (window.api.setLang) window.api.setLang(window.OO_LANG).catch(() => {});
-    if ($('menuLang')) $('menuLang').textContent = window.OO_LANG === 'en' ? '🌐 Русский (Russian)' : '🌐 English (английский)';
+    if ($('btnLang')) { $('btnLang').textContent = window.OO_LANG === 'en' ? '🌐 RU' : '🌐 EN'; $('btnLang').title = window.OO_LANG === 'en' ? 'Русский язык интерфейса (Russian)' : 'English interface (английский)'; $('btnLang').onclick = () => switchLanguage(); }
+    if ($('btnHelp')) $('btnHelp').onclick = () => showHelp();
     if (window.api.mobile) setupMobile();
     let restored = false;
     try {

@@ -26,6 +26,12 @@ kbd { font-size: 11px; color: var(--muted); margin-left: 12px; }
 .brand { font-size: 18px; font-weight: 300; letter-spacing: .3px; margin-right: 8px; white-space: nowrap; }
 .brand span { opacity: .75; }
 #topbar .menu, #topbar .actions { display: flex; gap: 4px; }
+#topbar .tb.help { min-width: 32px; font-weight: 700; }
+.help-list { display: flex; flex-direction: column; gap: 6px; min-width: min(520px, 86vw); }
+.help-item { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2, rgba(127,127,127,.08)); color: var(--text); cursor: pointer; font: inherit; }
+.help-item:hover { border-color: var(--accent2); }
+.help-play { font-size: 18px; color: var(--accent2); flex: none; }
+.help-text { display: flex; flex-direction: column; gap: 2px; }
 #topbar .title { flex: 1; text-align: center; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb { background: transparent; border: 0; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-transform: none; }
 .tb:hover { background: rgba(255,255,255,.12); }
@@ -368,6 +374,15 @@ body.mobile kbd { display: none; }
 }
 @media (max-width: 900px) {
   body.mobile .modal.wide .modal-body { position: relative; }
+  /* вкладки библиотеки и окна выбора листаются вбок; список прокручивается вместе с панелями над ним */
+  body.mobile .tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  body.mobile .tabs > * { flex: none; }
+  body.mobile .tabs::-webkit-scrollbar, body.mobile .lib-folders::-webkit-scrollbar { height: 4px; }
+  body.mobile .tabs::-webkit-scrollbar-thumb, body.mobile .lib-folders::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+  body.mobile .modal.wide .modal-body:has(.lib-layout) { overflow-y: auto; }
+  body.mobile .lib-layout { height: auto; }
+  body.mobile .lib-list .grid { overflow: visible; flex: none; min-height: 0; }
+  body.mobile .modal-body:has(.lib-edit.open) { overflow: hidden; }
   body.mobile .lib-layout { flex-direction: column; gap: 6px; }
   body.mobile .lib-folders { flex: none; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 6px; gap: 4px; max-height: 52px; }
   body.mobile .lib-folders > * { flex: none; white-space: nowrap; }

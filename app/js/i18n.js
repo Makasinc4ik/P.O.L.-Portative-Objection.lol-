@@ -4,7 +4,22 @@
 (function () {
   'use strict';
   let lang = 'ru';
-  try { lang = localStorage.getItem('oo.lang') === 'en' ? 'en' : 'ru'; } catch (e) { /* */ }
+  try {
+    const saved = localStorage.getItem('oo.lang');
+    if (saved === 'en' || saved === 'ru') lang = saved;
+    else if (localStorage.getItem('oo.autosave') || localStorage.getItem('oo.framesPerPage')) {
+      lang = 'ru'; // программа уже запускалась (до выбора языка был только русский) — оставить русский
+      localStorage.setItem('oo.lang', lang);
+    } else {
+      // первый запуск: язык системы — русский для русскоязычных систем, иначе английский; дальше — как выберет пользователь
+      const RU = ['ru', 'be', 'uk', 'kk', 'ky', 'tg', 'uz'];
+      const sys = (window.api && Array.isArray(window.api.sysLangs)) ? window.api.sysLangs : [];
+      const langs = [...sys, ...(navigator.languages || []), navigator.language || ''].map((x) => String(x).toLowerCase().split(/[-_]/)[0]).filter(Boolean);
+      // основной язык системы из «русскоязычных» или русский где-то в списке языков системы → русский
+      lang = RU.includes(langs[0]) || langs.includes('ru') ? 'ru' : 'en';
+      localStorage.setItem('oo.lang', lang);
+    }
+  } catch (e) { /* */ }
   const dict = lang === 'en' ? (window.OO_EN || {}) : null;
   const fill = (t, vals) => t.replace(/\{(\d+)\}/g, (m, i) => (Number(i) < vals.length ? String(vals[Number(i)]) : m));
 
