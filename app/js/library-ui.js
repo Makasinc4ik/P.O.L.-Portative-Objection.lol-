@@ -479,6 +479,8 @@
       field(tx('Картинка (PNG, GIF, WebP)'), fileSlot({ value: a.url, allowClear: false, onChange: (v, nm) => { a.url = v; if (!a.name && nm) a.name = nm; render(); } })),
       h('div', { class: 'row' }, n('resize', tx('Ширина, % кадра'), 30), n('posX', tx('Слева, %'), 0), n('posY', tx('Сверху, %'), 0)),
       chk(tx('По центру кадра'), a.center, (v) => { a.center = v; render(); }),
+      chk(tx('Растянуть на весь кадр (рамка или интерфейс поверх видео; ширина и положение не нужны)'), a.fill, (v) => { if (v) a.fill = true; else delete a.fill; render(); }),
+      a.fill ? h('div', { class: 'note' }, tx('Картинка занимает ровно весь кадр. Если её пропорции немного отличаются от кадра (например 435×845 при кадре 9:16), она чуть растягивается — без полос по краям.')) : null,
       chk(tx('Поверх окна текста (обычно картинка под окном)'), a.aboveTextbox, (v) => { a.aboveTextbox = v; }),
       field(tx('Режим наложения'), sel(window.OOBlendOptions(), a.blend || 'source-over', (v) => { if (v && v !== 'source-over') a.blend = v; else delete a.blend; render(); })),
       h('div', { class: 'row' },

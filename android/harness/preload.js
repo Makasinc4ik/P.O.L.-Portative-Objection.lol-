@@ -16,6 +16,23 @@ window.OOFS = {
   mkdirs: (p) => { try { fs.mkdirSync(p, { recursive: true }); return true; } catch (e) { return false; } },
   readText: (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; } },
   readB64: (p) => { try { return fs.readFileSync(p).toString('base64'); } catch (e) { return null; } },
+  head: (p, n) => { try { const fd = fs.openSync(p, 'r'); const b = Buffer.alloc(n); const got = fs.readSync(fd, b, 0, n, 0); fs.closeSync(fd); return b.slice(0, got).toString('base64'); } catch (e) { return null; } },
+  unzip: (zip, dest) => {
+    try {
+      const zlib = require('zlib'); const path = require('path');
+      const buf = fs.readFileSync(zip);
+      let e = -1; for (let i = buf.length - 22; i >= 0; i--) if (buf.readUInt32LE(i) === 0x06054b50) { e = i; break; }
+      let p = buf.readUInt32LE(e + 16); const n = buf.readUInt16LE(e + 10); const root = path.resolve(dest);
+      for (let k = 0; k < n; k++) {
+        const method = buf.readUInt16LE(p + 10); const cs = buf.readUInt32LE(p + 20); const nl = buf.readUInt16LE(p + 28); const xl = buf.readUInt16LE(p + 30); const cl = buf.readUInt16LE(p + 32); const off = buf.readUInt32LE(p + 42);
+        const name = buf.slice(p + 46, p + 46 + nl).toString('utf8'); p += 46 + nl + xl + cl;
+        const out = path.resolve(root, name); if (!out.startsWith(root + path.sep) || name.endsWith('/')) continue;
+        const ln = buf.readUInt16LE(off + 26); const lx = buf.readUInt16LE(off + 28); const d = buf.slice(off + 30 + ln + lx, off + 30 + ln + lx + cs);
+        fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, method === 8 ? zlib.inflateRawSync(d) : d);
+      }
+      return 'ok';
+    } catch (e) { return 'error:' + e.message; }
+  },
   writeText: (p, t, append) => { try { mk(p); (append ? fs.appendFileSync : fs.writeFileSync)(p, t); return true; } catch (e) { return false; } },
   writeB64: (p, b, append) => { try { mk(p); (append ? fs.appendFileSync : fs.writeFileSync)(p, Buffer.from(b, 'base64')); return true; } catch (e) { return false; } },
   writeAt: (p, b, pos) => { try { const fd = fs.openSync(p, fs.existsSync(p) ? 'r+' : 'w'); const buf = Buffer.from(b, 'base64'); fs.writeSync(fd, buf, 0, buf.length, pos); fs.closeSync(fd); return true; } catch (e) { return false; } },

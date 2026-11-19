@@ -32,6 +32,8 @@ const SYSTEM = {
 
 // Точки зацикливания стандартной музыки (мс), как на сайте
 const MUSIC_LOOPS = {"allegro2001":"1791-59104","allegro2002":"6857-51428","allegro2004":"1846-75692","blue badger":"4799-23999","circus":"12007-52078","congratulations":"1714-29142","cornered variation":"1599-39999","cornered":"8000-46399","cornered2002 variation":"8000-39999","cornered2002":"12799-44799","cornered2004 - pursuit variation":"4800-43199","cornered2004 - pursuit":"8000-46409","crossexamining":"6486-59999","crossexaminingvariation":"1621-55135","dahlia hawthorne":"0-68307","darkcoffee":"6760-74366","ema skye":"6857-54857","gant":"16006-67942","gumshoe":"2181-56727","luke atmey":"13759-53759","maya":"2307-76153","maya2":"2307-53076","miles edgeworth":"13452-46842","moderato2001":"1904-47619","moderato2002":"3387-42580","moderato2004":"1967-97376","objection":"25999-49999","objection2002":"18000-49999","objection2004":"2000-55999","reminiscence":"8000-63999","scars etched by flame":"2857-71428","search core":"6000-57999","search midst 2002":"2086-47999","search opening 2002":"2400-40799","sl-9 incident":"4173-45912","steel samurai":"3428-56571","suspense":"8571-35999","trial":"9599-57599","trial2":"4800-52799","trial3":"2448-66122","trick":"2181-71999","trick2002":"10-54867","truth2001":"3333-36666","truth2002":"8000-50666","truth2004":"3333-59999","von karma":"18947-52631","warehouse tiger":"6000-49999","wild west":"5760-49919","won the case":"6153-55384","truth2007":"0-47710","seeing through":"6368-29782","allegro2007":"3637-49091","trial4":"0-29689","suspense2007":"5474-23405","moderato2007":"0-34357","kitaki family":"12750-65860","cornered2007":"7297-52702","klavier":"5293-47650","trucy wright":"4910-87680","trial5":"0-54876","trick2007":"2160-47569","cornered2007 variation":"2431-47837","troupe gramarye":"7378-55388","psycho lock":"10240-68811","objection2007":"11440-57143","steel samurai's ballad":"6164-66768","kurain village":"10285-55714","allegro2009":"12584-99375","the great truth burglar":"0-67572","cornered2009":"4646-97574","presto2009":"1548-88278","moderato2009":"5217-117107","objection2009":"6965-86982","truth2009":"6672-74693","shi-long lang":"11403-88223","trial6":"22114-90337","hazy scenery":"4897-112653","defendant lobby":"4800-38399","pearl fey":"3428-32571","tragicomic interview":"0-103513","drew studio":"0-89150","solitary confinement":"0-49223","a hurt fox":"0-64845","a fate smeared by tricks and gadgets":"902-61811","search opening 2007":"0-38819","search core 2007":"2710-57951","forgotten legend":"1431-65362","won the case 2007":"3000-60610","eccentric 2007":"0-45360","the guitar's serenade":"6693-85764"};
+// id стандартного трека сайта → точки петли (по имени его файла в /api/assets/music/getPreset)
+const MUSIC_LOOPS_BY_ID = {"1":"1791-59104","2":"9599-57599","3":"4800-52799","4":"8000-46399","7":"1846-75692","8":"2000-55999","9":"0-54876","10":"8000-50666","11":"0-29689","12":"7297-52702","13":"6486-59999","14":"25999-49999","15":"2307-76153","16":"1714-29142","17":"3333-36666","18":"1904-47619","19":"5293-47650","20":"6760-74366","21":"8000-63999","22":"1621-55135","23":"3333-59999","24":"11440-57143","25":"0-47710","26":"16006-67942","27":"0-34357","40":"5760-49919","41":"6857-54857","45":"0-68307","57":"8000-46409","58":"5474-23405","60":"1548-88278","61":"6368-29782","62":"4910-87680","64":"1967-97376","65":"8571-35999","66":"12799-44799","68":"2160-47569","70":"6672-74693","72":"12584-99375","73":"22114-90337","75":"1599-39999","76":"18000-49999","77":"6857-51428","78":"10-54867","79":"2181-71999","80":"2448-66122","81":"6965-86982","4490":"0-38819","5345":"6164-66768","4491":"0-64845","82":"5217-117107","4492":"6693-85764","4493":"902-61811","4494":"1431-65362","4495":"0-45360","4496":"2710-57951","4497":"0-49223","4498":"0-103513","4499":"3000-60610","4500":"0-89150","113":"3387-42580","287":"18947-52631","288":"13759-53759","289":"13452-46842","325":"2400-40799","326":"2086-47999","469":"6000-49999","470":"12007-52078","7062":"4897-112653","7086":"4800-38399","7091":"3428-32571","694":"4800-43199","695":"4799-23999","697":"2307-53076","698":"4646-97574","699":"12750-65860","700":"4173-45912","701":"2181-56727","702":"6153-55384","703":"7378-55388","704":"3428-56571","705":"11403-88223","706":"0-67572","707":"2431-47837","709":"10240-68811","710":"2857-71428","711":"6000-57999","712":"3637-49091","744":"8000-39999","5349":"10285-55714"};
 
 const Lib = {
   data: null,
@@ -83,6 +85,8 @@ const Lib = {
     const saved = await window.api.lib.upsert(type, asset);
     // файл могли заменить другим под тем же именем — сбрасываем кэши картинок и миниатюр этого ресурса
     for (const u of new Set([...assetUrls(before), ...assetUrls(asset), ...assetUrls(saved)])) { ImageCache.forget(u); Thumbs.forget(u); }
+    // шрифты: новый файл ложится под тем же именем, что и старый, — без сброса оставался старый шрифт
+    for (const u of new Set([...assetUrls(before, FONT_RE), ...assetUrls(asset, FONT_RE), ...assetUrls(saved, FONT_RE)])) Fonts.forget(u);
     const arr = this.data[type];
     const i = arr.findIndex((a) => a.id === saved.id);
     if (i >= 0) arr[i] = saved; else arr.push(saved);
@@ -133,8 +137,9 @@ const Lib = {
   },
   musicLoop(music) {
     if (!music || !music.isPreset) return null;
+    // на сайте точки петли привязаны к имени файла, а не к названию трека (Trial2001 → trial.ogg)
     const key = (music.name || '').toLowerCase();
-    const v = MUSIC_LOOPS[key];
+    const v = MUSIC_LOOPS_BY_ID[music.id] || MUSIC_LOOPS[key];
     if (!v) return null;
     const [a, b] = v.split('-').map(Number);
     return { start: a / 1000, end: b / 1000 };
@@ -250,11 +255,15 @@ const ImageCache = {
     }
     this.epoch = (this.epoch || 0) + 1;
   },
+  // убрать из кэша закрытую картинку (чтобы следующий get загрузил файл заново)
+  forgetImg(img) { for (const [k, e] of [...this.map.entries()]) if (e.img === img) { this.bytes -= e.img.bytes || 0; this.map.delete(k); } },
   forget(url) {
     const real = Lib.url(url);
+    const live = this.live();
     for (const [k, e] of [...this.map.entries()]) {
       if (!k.startsWith(real + '@')) continue;
-      if (e.img && !this.pinned.has(e.img) && !this.sticky.has(e.img)) { this.bytes -= e.img.bytes; e.img.close(); }
+      // картинку, которая сейчас на экране, не закрываем — только убираем из кэша (иначе персонаж пропадает до смены кадра)
+      if (e.img && !this.pinned.has(e.img) && !this.sticky.has(e.img) && !live.has(e.img)) { this.bytes -= e.img.bytes; e.img.close(); }
       this.map.delete(k);
     }
     this.epoch = (this.epoch || 0) + 1;
@@ -262,11 +271,12 @@ const ImageCache = {
 };
 
 // все ссылки на файлы внутри ресурса (картинки поз, звуки и т. п.)
-function assetUrls(a) {
+const FONT_RE = /\.(ttf|otf|woff2?)(\?|#|$)/i;
+function assetUrls(a, re = /\.(png|gif|webp|jpe?g|avif|bmp|svg)(\?|#|$)/i) {
   const out = [];
   const walk = (v) => {
     if (!v) return;
-    if (typeof v === 'string') { if (/\.(png|gif|webp|jpe?g|avif|bmp|svg)(\?|#|$)/i.test(v)) out.push(v); return; }
+    if (typeof v === 'string') { if (re.test(v)) out.push(v); return; }
     if (Array.isArray(v)) { v.forEach(walk); return; }
     if (typeof v === 'object') for (const x of Object.values(v)) walk(x);
   };
@@ -491,14 +501,19 @@ class AudioEngine {
 // ---------- Шрифты текстбоксов ----------
 const Fonts = {
   map: new Map(),
+  gen: new Map(), // сколько раз файл заменяли — для обхода кэша
+  n: 0,
+  forget(url) { if (!url) return; const real = Lib.url(url); if (this.map.has(real)) { this.map.delete(real); this.gen.set(real, (this.gen.get(real) || 0) + 1); } },
   family(url) {
     if (!url) return null;
     const real = Lib.url(url);
     let e = this.map.get(real);
     if (!e) {
-      const fam = 'tbf' + this.map.size;
+      const fam = 'tbf' + this.n++;
       e = { fam, ready: false, failed: false, promise: null };
-      e.promise = new FontFace(fam, `url("${real}")`).load().then((ff) => { document.fonts.add(ff); e.ready = true; }).catch(() => { e.failed = true; });
+      const g = this.gen.get(real);
+      const src = g ? real + (real.includes('?') ? '&' : '?') + 'v=' + g + '-' + Date.now() : real;
+      e.promise = new FontFace(fam, `url("${src}")`).load().then((ff) => { document.fonts.add(ff); e.ready = true; }).catch(() => { e.failed = true; });
       this.map.set(real, e);
     }
     return e;
@@ -654,6 +669,9 @@ const Marks = {
     const take = (txt, words) => {
       const whole = txt.trim().toLowerCase();
       if (tagByAlias(whole)) out.add(tagByAlias(whole));
+      // «(AJT based)», «(PWT style)», «(AAI ui)» — игра и пояснение «по мотивам»
+      const based = /^([a-z0-9&:-]+)[\s-]+(based|style|styled|ui|like|inspired|edition|version|ver\.?)$/.exec(whole);
+      if (based && tagByAlias(based[1])) out.add(tagByAlias(based[1]));
       if (words) for (const part of whole.split(/[^a-z0-9&:]+/)) { const t = tagByAlias(part); if (t) out.add(t); }
     };
     let m;

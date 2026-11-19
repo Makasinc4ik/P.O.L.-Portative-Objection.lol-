@@ -1290,6 +1290,7 @@
     if (!r) return;
     let p;
     try { p = decodeProject(r.text); } catch (e) { toast(tx('Не удалось прочитать файл проекта'), 5000); return; }
+    if (r.bundle) await Lib.load(); // ресурсы из архива уже в библиотеке
     if (p.type && p.type !== 'scene') {
       await confirmDialog(tx('Это интерактивное «дело» (Case). Пока поддерживаются только сцены — откроется первая группа кадров как обычная сцена.'), { ok: tx('Понятно'), cancel: tx('Отмена') });
       p.type = 'scene';
@@ -1299,6 +1300,9 @@
     if (r.path) { try { const same = (await window.api.scenes.list()).find((x) => x.filePath === r.path); if (same) sceneId = same.id; } catch (e) { /* */ } }
     setProject(p, { path: r.path, name: r.name, sceneId });
     saveSceneNow();
+    if (r.bundle) {
+      toast(tx`Проект с ресурсами: добавлено в библиотеку ${r.bundle.added}, уже были ${r.bundle.skipped}`, 7000);
+    }
     checkMissing(true);
   }
 
@@ -1506,6 +1510,7 @@
       if (f.charOpacity != null && Number(f.charOpacity) < 100) add(i, tx`${at(i)}: полупрозрачный персонаж — на сайте будет обычный`);
       const pp = f.popupId ? Lib.get('popups', f.popupId) : null;
       if (pp && pp.blend && pp.blend !== 'source-over') add(i, tx`${at(i)}: режим наложения картинки «${pp.name}» — на сайте его нет`);
+      if (pp && pp.fill) add(i, tx`${at(i)}: картинка «${pp.name}» растянута на весь кадр — на сайте она будет своего размера`);
       if (pp && ((pp.opacity != null && Number(pp.opacity) < 100) || Number(pp.fadeInMs) > 0 || Number(pp.fadeOutMs) > 0)) add(i, tx`${at(i)}: прозрачность или плавное появление картинки «${pp.name}» — на сайте её нет`);
       if (f.pairAllTalk && f.pair) add(i, tx`${at(i)}: «Говорят все в паре» — на сайте говорит только один персонаж`);
       if (f.popupFx && Object.keys(f.popupFx).some((k) => k !== 'blend')) add(i, tx`${at(i)}: своя прозрачность или плавность картинки в кадре — на сайте её нет`);
@@ -2064,6 +2069,7 @@
       if (act === 'open') doOpen();
       if (act === 'save') doSave(false);
       if (act === 'saveas') doSave(true);
+      if (act === 'bundle') exportBundle();
       if (act === 'download') checkMissing(false);
       if (act === 'libdir') openLibraryDirDialog();
       if (act === 'uifont') openFrameFontDialog();
@@ -2082,6 +2088,7 @@
     $('btnExport').onclick = () => openExport();
     $('btnAddFrameTop').onclick = () => addFrame(0);
     $('frameSearch').addEventListener('input', (e) => { App.search = e.target.value; App.page = 0; renderFrames(); });
+    if ($('btnFindReplace')) $('btnFindReplace').onclick = () => openFind(true);
     $('stage').addEventListener('click', () => { if (App.player.playing) App.player.click(); });
     $('chkManual').addEventListener('change', (e) => { localStorage.setItem('oo.manual', e.target.checked ? '1' : ''); });
     $('chkManual').checked = !!localStorage.getItem('oo.manual');
@@ -2107,6 +2114,8 @@
       const modalOpen = !!document.querySelector('.modal-wrap');
       if (e.ctrlKey && !e.altKey && isKey(e, 's')) { e.preventDefault(); doSave(e.shiftKey); return; }
       if (modalOpen) return;
+      if (e.ctrlKey && !e.altKey && (isKey(e, 'f') || isKey(e, 'h'))) { e.preventDefault(); openFind(isKey(e, 'h')); return; }
+      if (e.key === 'F3' && findPanel) { e.preventDefault(); findPanel.next(e.shiftKey ? -1 : 1); return; }
       if (e.ctrlKey && !e.altKey && isKey(e, 'o')) { e.preventDefault(); doOpen(); return; }
       if (e.ctrlKey && e.altKey && isKey(e, 'n')) { e.preventDefault(); doNew(); return; }
       if (e.ctrlKey && isKey(e, 'z') && !inField) { e.preventDefault(); if (e.shiftKey) redoFn(); else undo(); return; }
@@ -2295,6 +2304,125 @@
     window.setUiLang(to);
   }
 
+  // ---------- Проект с ресурсами (ZIP) — перенести на другое устройство без скачивания ----------
+  async function exportBundle() {
+    if (!window.api.project.exportBundle) return;
+    const presets = localStorage.getItem('oo.bundle.presets') !== '0';
+    const chkEl = h('input', { type: 'checkbox', checked: presets });
+    const ok = await confirmDialog([
+      h('p', null, tx('В архив попадут проект и все его ресурсы: персонажи, фоны, музыка, звуки, текстбоксы, улики и картинки. На другом устройстве (например, на телефоне) архив открывается через «Файл → Открыть…» или «Открыть с помощью» из Telegram — ресурсы сразу добавятся в библиотеку, скачивать ничего не нужно.')),
+      h('label', { class: 'chk' }, chkEl, tx('Включить и стандартные ресурсы objection.lol (архив больше, зато на телефоне не нужно ничего докачивать)')),
+    ], { ok: tx('Сохранить архив'), title: tx('Проект с ресурсами') });
+    if (!ok) return;
+    localStorage.setItem('oo.bundle.presets', chkEl.checked ? '1' : '0');
+    const busy = modal({ title: tx('Проект с ресурсами'), body: [h('p', null, tx('Сборка архива…'))], foot: [] });
+    try {
+      const r = await window.api.project.exportBundle({ text: encodeProject(App.project), name: (App.fileName || 'project').replace(/\.objection$/i, ''), includePresets: chkEl.checked });
+      busy.close();
+      if (r) toast(tx`Сохранено: ${r.assets} ресурсов, ${r.files} файлов, ${fmtBytes(r.bytes)}`, 6000);
+    } catch (e) { busy.close(); toast(tx('Не удалось сохранить архив: ') + e.message, 7000); }
+  }
+  App.exportBundle = exportBundle;
+
+  // ---------- Найти и заменить во всех кадрах (Ctrl+F / Ctrl+H) ----------
+  // По умолчанию теги [#…] и [/#] не трогаются — меняется только сам текст реплик.
+  let findPanel = null;
+  function findMatches(text, q, { cs, tags }) {
+    const out = [];
+    if (!q) return out;
+    const src = cs ? text : text.toLowerCase(); const needle = cs ? q : q.toLowerCase();
+    const tagSpans = [];
+    if (!tags) { const re = /\[#[^\]]*\]|\[\/#\]/g; let m; while ((m = re.exec(text))) tagSpans.push([m.index, m.index + m[0].length]); }
+    let i = 0;
+    while ((i = src.indexOf(needle, i)) >= 0) {
+      const end = i + needle.length;
+      if (!tagSpans.some(([a, b]) => i < b && end > a)) out.push([i, end]);
+      i = end > i ? end : i + 1;
+    }
+    return out;
+  }
+  function openFind(replaceMode) {
+    if (findPanel) { findPanel.el.remove(); findPanel = null; }
+    const opts = { cs: localStorage.getItem('oo.find.cs') === '1', tags: localStorage.getItem('oo.find.tags') === '1' };
+    const q = h('input', { class: 'input', placeholder: tx('Найти'), value: localStorage.getItem('oo.find.q') || '' });
+    const r = h('input', { class: 'input', placeholder: tx('Заменить на'), value: localStorage.getItem('oo.find.r') || '' });
+    const info = h('div', { class: 'muted find-info' });
+    let pos = { frame: App.sel ?? 0, at: -1 };
+    const all = () => {
+      const list = [];
+      frames().forEach((f, fi) => { for (const [a, b] of findMatches(f.text || '', q.value, opts)) list.push({ fi, a, b }); });
+      return list;
+    };
+    const count = () => { const n = all().length; const fr = new Set(all().map((x) => x.fi)).size; info.textContent = q.value ? (n ? tx`Найдено: ${n} (кадров: ${fr})` : tx('Не найдено')) : ''; return n; };
+    const show = (m) => {
+      App.select(m.fi);
+      pos = { frame: m.fi, at: m.a };
+      setTimeout(() => {
+        const ta = document.querySelector(`.frame[data-idx="${m.fi}"] textarea`);
+        if (ta) { ta.focus(); ta.setSelectionRange(m.a, m.b); const el = ta.closest('.frame'); if (el) el.scrollIntoView({ block: 'nearest' }); }
+        q.focus();
+      }, 30);
+    };
+    const next = (dir = 1) => {
+      const list = all(); count();
+      if (!list.length) return null;
+      const key = (m) => m.fi * 1e7 + m.a;
+      const cur = pos.frame * 1e7 + pos.at;
+      let m = dir > 0 ? list.find((x) => key(x) > cur) : [...list].reverse().find((x) => key(x) < cur);
+      if (!m) m = dir > 0 ? list[0] : list[list.length - 1];
+      show(m);
+      return m;
+    };
+    const replaceOne = () => {
+      const list = all();
+      const m = list.find((x) => x.fi === pos.frame && x.a === pos.at);
+      if (!m) { next(1); return; }
+      pushUndo();
+      const f = frames()[m.fi];
+      f.text = f.text.slice(0, m.a) + r.value + f.text.slice(m.b);
+      markDirty(); renderFrames(); renderInspector(); showStill();
+      pos = { frame: m.fi, at: m.a + r.value.length - 1 };
+      next(1);
+    };
+    const replaceAll = () => {
+      const list = all();
+      if (!list.length) { count(); return; }
+      pushUndo();
+      const byFrame = new Map();
+      for (const m of list) { if (!byFrame.has(m.fi)) byFrame.set(m.fi, []); byFrame.get(m.fi).push(m); }
+      for (const [fi, ms] of byFrame) {
+        const f = frames()[fi];
+        let t = f.text;
+        for (const m of ms.reverse()) t = t.slice(0, m.a) + r.value + t.slice(m.b);
+        f.text = t;
+      }
+      markDirty(); renderFrames(); renderInspector(); showStill();
+      count();
+      info.textContent = tx`Заменено: ${list.length} (кадров: ${byFrame.size}). Отмена — Ctrl+Z.`;
+    };
+    const save = () => { localStorage.setItem('oo.find.q', q.value); localStorage.setItem('oo.find.r', r.value); };
+    q.addEventListener('input', () => { save(); pos = { frame: App.sel ?? 0, at: -1 }; count(); });
+    r.addEventListener('input', save);
+    const onKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (e.target === r && e.ctrlKey) replaceAll(); else if (e.target === r) replaceOne(); else next(e.shiftKey ? -1 : 1); }
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+    };
+    q.addEventListener('keydown', onKey); r.addEventListener('keydown', onKey);
+    const optChk = (label, k, title) => h('label', { class: 'chk', title }, h('input', { type: 'checkbox', checked: opts[k], onchange: (e) => { opts[k] = e.target.checked; localStorage.setItem('oo.find.' + k, e.target.checked ? '1' : '0'); count(); } }), label);
+    const close = () => { el.remove(); findPanel = null; };
+    const el = h('div', { class: 'find-panel' },
+      h('div', { class: 'find-row' }, q, h('button', { class: 'btn small', title: tx('Предыдущее (Shift+Enter)'), onclick: () => next(-1) }, '↑'), h('button', { class: 'btn small', title: tx('Следующее (Enter, F3)'), onclick: () => next(1) }, '↓'), h('button', { class: 'btn small', title: tx('Закрыть (Esc)'), onclick: close }, '✕')),
+      h('div', { class: 'find-row' }, r, h('button', { class: 'btn small', onclick: replaceOne }, tx('Заменить')), h('button', { class: 'btn small primary', onclick: replaceAll }, tx('Заменить все'))),
+      h('div', { class: 'find-row' }, optChk(tx('Учитывать регистр'), 'cs'), optChk(tx('Менять и внутри тегов'), 'tags', tx('Без галочки теги вроде [#bgm12] и [/#] не меняются'))),
+      info);
+    document.body.append(el);
+    findPanel = { el, next };
+    count();
+    (replaceMode && q.value ? r : q).focus();
+    q.select();
+  }
+  App.openFind = openFind;
+
   // ---------- Обучение: видеоуроки (список — app/tutorials.json и tutorials.json в репозитории на GitHub) ----------
   async function showHelp() {
     const list = h('div', { class: 'help-list' }, h('div', { class: 'muted' }, tx('Загрузка списка…')));
@@ -2322,7 +2450,7 @@
   App.showHelp = showHelp;
 
   // ---------- Проверка обновлений (GitHub Releases) ----------
-  const REPO_URL = 'https://github.com/Makasinc4ik/P.O.L.-Portative-Objection.lol-';
+  const REPO_URL = 'https://github.com/Sandwich222/P.O.L.-Portative-Objection.lol-';
   const RELEASES_URL = REPO_URL + '/releases';
   function autoCheckUpdate() {
     if (!window.api.checkUpdate || localStorage.getItem('oo.updateAuto') === '0') return;

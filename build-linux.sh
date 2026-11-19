@@ -13,7 +13,7 @@ mv "$OUT/electron" "$OUT/objection-offline"
 rm -f "$OUT/resources/default_app.asar"
 find "$OUT/locales" -name '*.pak' ! -name 'ru.pak' ! -name 'en-US.pak' -delete
 mkdir -p "$OUT/resources/app"
-cp -r main.js preload.js zipimport.js storage.js app "$OUT/resources/app/"
+cp -r main.js preload.js zipimport.js storage.js bundle.js app "$OUT/resources/app/"
 node -e "const p=require('./package.json');delete p.devDependencies;delete p.scripts;require('fs').writeFileSync('$OUT/resources/app/package.json',JSON.stringify(p,null,2))"
 cp app/icon.png "$OUT/objection-offline.png"
 

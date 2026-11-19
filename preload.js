@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('api', {
   project: {
     open: () => ipcRenderer.invoke('project:open'),
     readPath: (p) => ipcRenderer.invoke('project:readPath', p),
+    exportBundle: (o) => ipcRenderer.invoke('project:exportBundle', o),
     save: (opts) => ipcRenderer.invoke('project:save', opts),
   },
   video: {

@@ -34,9 +34,12 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -457,6 +460,40 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public String readB64(String p) {
             try { return Base64.encodeToString(readAll(new File(p)), Base64.NO_WRAP); } catch (IOException e) { return null; }
+        }
+
+        /** Первые n байт файла (base64) — узнать тип файла, не читая его целиком */
+        @JavascriptInterface public String head(String p, int n) {
+            try (InputStream in = new FileInputStream(p)) {
+                byte[] b = new byte[Math.max(0, n)];
+                int got = 0, r;
+                while (got < b.length && (r = in.read(b, got, b.length - got)) > 0) got += r;
+                return Base64.encodeToString(b, 0, got, Base64.NO_WRAP);
+            } catch (IOException e) { return null; }
+        }
+
+        /** Распаковать ZIP в папку (проект с ресурсами); имена с «../» не выходят за пределы папки */
+        @JavascriptInterface public String unzip(String zip, String dest) {
+            try (ZipInputStream zin = new ZipInputStream(new BufferedInputStream(new FileInputStream(zip), 1 << 16))) {
+                File root = new File(dest).getCanonicalFile();
+                root.mkdirs();
+                byte[] buf = new byte[1 << 16];
+                ZipEntry e;
+                while ((e = zin.getNextEntry()) != null) {
+                    File out = new File(root, e.getName()).getCanonicalFile();
+                    if (!out.getPath().startsWith(root.getPath() + File.separator)) continue;
+                    if (e.isDirectory()) { out.mkdirs(); continue; }
+                    File parent = out.getParentFile();
+                    if (parent != null) parent.mkdirs();
+                    try (OutputStream os = new FileOutputStream(out)) {
+                        int n;
+                        while ((n = zin.read(buf)) > 0) os.write(buf, 0, n);
+                    }
+                }
+                return "ok";
+            } catch (Exception ex) {
+                return "error:" + ex.getMessage();
+            }
         }
 
         @JavascriptInterface public boolean writeText(String p, String text, boolean append) {

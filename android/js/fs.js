@@ -138,7 +138,10 @@ export const promises = {
   open: wrap((p) => new FileHandle(p)),
 };
 
+// проект с ресурсами (ZIP): распаковка и проверка начала файла — средствами Android
+export function __ooUnzip(zip, dest) { const r = FS().unzip(S(zip), S(dest)); return r === 'ok' ? true : r; }
+export function __ooHead(p, n) { const b = FS().head ? FS().head(S(p), n) : null; return b == null ? null : Buffer.from(b, 'base64'); }
 export default {
   existsSync, statSync, lstatSync, readdirSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, renameSync,
-  copyFileSync, unlinkSync, rmSync, rmdirSync, createReadStream, promises,
+  copyFileSync, unlinkSync, rmSync, rmdirSync, createReadStream, promises, __ooUnzip, __ooHead,
 };

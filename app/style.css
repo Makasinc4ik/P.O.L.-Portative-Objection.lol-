@@ -394,3 +394,11 @@ body.mobile kbd { display: none; }
   body.mobile .lib-edit-back { position: sticky; top: 0; z-index: 2; background: var(--panel); padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
   body.mobile .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 }
+
+/* Найти и заменить */
+.find-panel { position: fixed; top: 56px; right: 16px; z-index: 900; width: min(440px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 6px; }
+.find-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.find-row .input { flex: 1 1 160px; min-width: 0; }
+.find-info { font-size: 12px; min-height: 16px; }
+.card .pick-play { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: 1px solid rgba(255,255,255,.35); font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; }
+.card .pick-play:hover, .card .pick-play.on { background: var(--accent2, #3fb38a); }

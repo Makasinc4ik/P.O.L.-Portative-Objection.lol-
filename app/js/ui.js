@@ -230,7 +230,11 @@
           h('button', { class: 'ct-btn', title: tx('Метки (папки, в которых может быть сразу несколько ресурсов)'), onclick: (e) => { e.stopPropagation(); editTags(it); } }, '🏷')));
       }
       el.addEventListener('click', () => m.close({ value: it.id }));
-      if (onPreview) el.addEventListener('contextmenu', (e) => { e.preventDefault(); onPreview(it); });
+      if (onPreview) {
+        el.addEventListener('contextmenu', (e) => { e.preventDefault(); onPreview(it); });
+        // видимая кнопка «прослушать» (на телефоне правого клика нет)
+        el.append(h('button', { class: 'ct-btn pick-play', title: tx('Прослушать'), onclick: (e) => { e.stopPropagation(); grid.querySelectorAll('.pick-play.on').forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); onPreview(it); } }, '▶'));
+      }
       return el;
     }
     search.addEventListener('input', render);
@@ -238,8 +242,8 @@
       Marks.SORTS.map(([v, l]) => h('option', { value: v, selected: v === sortMode || null }, l))) : null;
     const viewBtn = smart ? h('button', { class: 'btn small', title: tx('Плитка / список'), onclick: () => { view = view === 'list' ? 'grid' : 'list'; localStorage.setItem('oo.pick.view', view); viewBtn.textContent = view === 'list' ? tx('▦ Плитка') : tx('☰ Список'); render(); } }, view === 'list' ? tx('▦ Плитка') : tx('☰ Список')) : null;
     const body = smart
-      ? h('div', { class: 'pick-wrap' }, side, h('div', { class: 'pick-main' }, h('div', { class: 'toolbar' }, search, sortSel, viewBtn, extra || null, onPreview ? h('span', { class: 'muted' }, tx('Правый клик — прослушать')) : null), grid))
-      : h('div', null, h('div', { class: 'toolbar' }, search, extra || null, onPreview ? h('span', { class: 'muted' }, tx('Правый клик — прослушать')) : null), grid);
+      ? h('div', { class: 'pick-wrap' }, side, h('div', { class: 'pick-main' }, h('div', { class: 'toolbar' }, search, sortSel, viewBtn, extra || null, onPreview ? h('span', { class: 'muted' }, tx('▶ на карточке — прослушать')) : null), grid))
+      : h('div', null, h('div', { class: 'toolbar' }, search, extra || null, onPreview ? h('span', { class: 'muted' }, tx('▶ на карточке — прослушать')) : null), grid);
     m = modal({ title, wide: true, body });
     renderSide();
     render();

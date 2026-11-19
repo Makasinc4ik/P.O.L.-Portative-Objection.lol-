@@ -81,6 +81,7 @@ window.api = {
   project: {
     open: () => invoke('project:open'),
     readPath: (p) => invoke('project:readPath', p),
+    exportBundle: (o) => invoke('project:exportBundle', o),
     save: (opts) => invoke('project:save', opts),
   },
   video: {

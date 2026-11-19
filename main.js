@@ -8,6 +8,7 @@ const fsp = fs.promises;
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { importCharactersFromZip } = require('./zipimport');
+const Bundle = require('./bundle');
 const S = require('./storage');
 
 // Перевод сообщений: язык выбирает окно программы (app:setLang); ключ — русская строка, как в app/js/i18n.js
@@ -112,7 +113,7 @@ async function mediaResponse(file, type, range) {
 let win;
 let launchFile = null;
 function fileFromArgv(argv) {
-  return (argv || []).slice(1).find((a) => /\.objection$/i.test(a) && fs.existsSync(a)) || null;
+  return (argv || []).slice(1).find((a) => /\.(objection|zip)$/i.test(a) && fs.existsSync(a)) || null;
 }
 function createWindow() {
   win = new BrowserWindow({
@@ -625,6 +626,25 @@ async function mergeAssets(type, keepId, removeIds) {
   return true;
 }
 
+// ---------- Файл проекта: обычный .objection или ZIP «проект с ресурсами» ----------
+function decodeProjectText(text) {
+  const t = String(text || '').trim();
+  return JSON.parse(t.startsWith('{') ? t : Buffer.from(t.replace(/\s+/g, ''), 'base64').toString('utf8'));
+}
+function encodeProjectText(p) { return Buffer.from(JSON.stringify(p), 'utf8').toString('base64'); }
+async function readProjectFile(p) {
+  if (/\.(zip|oozip)$/i.test(p) || await Bundle.isZip(p)) {
+    const r = await Bundle.importBundle({
+      S, L: lib(), zipPath: p, tmpDir: path.join(S.st.dir, '.inbox', 'bundle-' + Date.now().toString(36)),
+      folder: tx('Из архива'), decode: decodeProjectText, encode: encodeProjectText,
+    });
+    const name = S.safeName(r.name || path.basename(p, path.extname(p))) + '.objection';
+    // путь архива не запоминается как путь проекта — «Сохранить» спросит, куда сохранить .objection
+    return { path: null, name, text: r.text, bundle: { added: r.added, skipped: r.skipped, remapped: r.remapped } };
+  }
+  return { path: p, name: path.basename(p), text: await fsp.readFile(p, 'utf8') };
+}
+
 // ---------- Пакеты ресурсов (.oopack) ----------
 async function exportAssetPack(type, id) {
   const asset = lib()[type].find((a) => a.id === id);
@@ -1125,14 +1145,23 @@ function registerIpc() {
   ipcMain.handle('project:open', async () => {
     const r = await dialog.showOpenDialog(win, {
       title: tx('Открыть проект'),
-      filters: [{ name: tx('Проект objection'), extensions: ['objection', 'json', 'txt'] }, { name: tx('Все файлы'), extensions: ['*'] }],
+      filters: [{ name: tx('Проект objection или проект с ресурсами'), extensions: ['objection', 'zip', 'json', 'txt'] }, { name: tx('Все файлы'), extensions: ['*'] }],
       properties: ['openFile'],
     });
     if (r.canceled || !r.filePaths[0]) return null;
-    const p = r.filePaths[0];
-    return { path: p, name: path.basename(p), text: await fsp.readFile(p, 'utf8') };
+    return readProjectFile(r.filePaths[0]);
   });
-  ipcMain.handle('project:readPath', async (e, p) => ({ path: p, name: path.basename(p), text: await fsp.readFile(p, 'utf8') }));
+  ipcMain.handle('project:readPath', async (e, p) => readProjectFile(p));
+  // Сохранить проект вместе с ресурсами (ZIP) — для переноса на другое устройство
+  ipcMain.handle('project:exportBundle', async (e, { text, name, includePresets }) => {
+    const r = await dialog.showSaveDialog(win, {
+      title: tx('Проект с ресурсами'),
+      defaultPath: path.join(app.getPath('documents'), S.safeName(name || 'project') + '.zip'),
+      filters: [{ name: tx('Проект с ресурсами (ZIP)'), extensions: ['zip'] }],
+    });
+    if (r.canceled || !r.filePath) return null;
+    return Bundle.exportBundle({ S, L: lib(), project: decodeProjectText(text), text, name, filePath: r.filePath, includePresets, appVersion: app.getVersion(), localOf: (ref) => lib().urlMap[absUrl(ref)] || null });
+  });
   ipcMain.handle('project:save', async (e, { path: p, text, suggestedName }) => {
     let target = p;
     if (!target) {
@@ -1215,7 +1244,7 @@ function registerIpc() {
 }
 
 // ---------- Проверка обновлений: последний выпуск в GitHub Releases ----------
-const UPDATE_REPO = 'Makasinc4ik/P.O.L.-Portative-Objection.lol-';
+const UPDATE_REPO = 'Sandwich222/P.O.L.-Portative-Objection.lol-';
 function verParts(v) { return String(v || '').trim().replace(/^[^0-9]*/, '').split(/[.\-+ ]/).slice(0, 3).map((n) => parseInt(n, 10) || 0); }
 function verCmp(a, b) { const x = verParts(a); const y = verParts(b); for (let i = 0; i < 3; i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0 ? 1 : -1; } return 0; }
 function platformAsset(assets) {

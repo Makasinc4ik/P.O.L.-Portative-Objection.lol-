@@ -507,7 +507,7 @@
         chars.push({
           c, pose, entry: sc.entry, isMain: sc.isMain, front: sc.front, slot: sc.slot,
           idle, speak: speak || idle, override: null, overrideStart: 0, start: this.now(),
-          flipped: !!(flipped & sc.slot),
+          flipped: !!(flipped & sc.slot), src: { idle: pose.idleImageUrl, speak: pose.speakImageUrl || pose.idleImageUrl, h },
         });
         this.lastPoses[c.id] = pose.id;
       }
@@ -1132,6 +1132,19 @@
     destroy() { this.destroyed = true; cancelAnimationFrame(this.rafId); Player.instances.delete(this); }
 
     // Картинки, которые сейчас на экране (их нельзя выгружать при очистке памяти)
+    // Картинка персонажа оказалась выгружена (закрыта), пока кадр на экране, — загрузить заново, а не оставлять пустое место
+    healChar(ch) {
+      if (!ch.src || ch.healing || (ch.healedAt && performance.now() - ch.healedAt < 1000)) return;
+      const { ImageCache } = window.Assets;
+      if (ImageCache.alive(ch.idle) && ImageCache.alive(ch.speak)) return;
+      ch.healing = true;
+      for (const k of ['idle', 'speak']) if (ch[k] && !ImageCache.alive(ch[k])) ImageCache.forgetImg && ImageCache.forgetImg(ch[k]);
+      Promise.all([ImageCache.get(ch.src.idle, ch.src.h), ImageCache.get(ch.src.speak, ch.src.h)]).then(([a, b]) => {
+        if (a) { if (ch.override === ch.idle) ch.override = null; ch.idle = a; }
+        if (b) ch.speak = b; else if (a) ch.speak = a;
+      }).catch(() => {}).finally(() => { ch.healing = false; ch.healedAt = performance.now(); });
+    }
+
     liveImages() {
       const st = this.state || {};
       const out = [st.bg?.img, st.bg?.desk, st.popup?.img, st.evidence?.img, st.evidence?.box, st.bubble?.img];
@@ -1278,7 +1291,7 @@
         if (!img) { img = ch.talking && talking ? ch.speak : ch.idle; t0 = this.epochOf(img); }
         if (!img) continue;
         const bmp = this.charBmp(ch, img, now, t0);
-        if (!bmp || !bmp.width) continue;
+        if (!bmp || !bmp.width) { this.healChar(ch); continue; }
         // прозрачность персонажа кадра (например, призрак) умножается на затемнение
         const alpha = (st.charAlpha[ch.slot] ?? 1) * (ch.isMain && st.charOpacity != null ? st.charOpacity : 1);
         if (alpha <= 0) continue;
@@ -1301,11 +1314,12 @@
         if (!bmp || !bmp.width || alpha <= 0) return;
         const a = pp.asset;
         const { bx, bw } = this.popupBox(a);
-        const w = (bw * (a.resize || 0)) / 100;
-        const hh = (w * bmp.height) / bmp.width;
+        // «Растянуть на весь кадр»: рамки и интерфейс поверх видео — ровно по кадру, даже если пропорции картинки чуть другие
+        const w = a.fill ? W : (bw * (a.resize || 0)) / 100;
+        const hh = a.fill ? H : (w * bmp.height) / bmp.width;
         if (w <= 0) return;
-        const x = a.center ? (W - w) / 2 : bx + (bw * (a.posX || 0)) / 100;
-        const y = a.center ? (H - hh) / 2 : (H * (a.posY || 0)) / 100;
+        const x = a.fill ? 0 : a.center ? (W - w) / 2 : bx + (bw * (a.posX || 0)) / 100;
+        const y = a.fill ? 0 : a.center ? (H - hh) / 2 : (H * (a.posY || 0)) / 100;
         g.save();
         g.globalAlpha = Math.max(0, Math.min(1, alpha));
         g.globalCompositeOperation = blendOf(pfx(pp).blend);
