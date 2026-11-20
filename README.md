@@ -1,12 +1,39 @@
 # P.O.L. (П.О.Л.)
 
-П.О.Л. - Портативный Обджекшн Лол, который выполняет функцию сайта Objection.lol в виде стационарной программы на ПК и андроид.
+(English)
+P.O.L. or Portative Objection.lol is a fanmade portative version of the Objection.lol website which functions as an app for PC and android.
 
-Данная программа была создана чисто благодаря чудесам вайбкодинга** и энтузиазму Рускоязычного комьюнити Аce Аttorney и Objection.lol'a в пользу автономного приложения, не зависящее от сторонних облачных ресурсов и степени блокировки интернета.
+This programm has all the functionality from the Objection.lol and has even more cool stuff than the original website!
+For example:
+- Fast export.
+- Different types of effects and filters for the video.
+- Ability to download all of the assets from your library on Objetion.lol.
+- The 9:16 ratio.
+- And much-much more!
 
-Лицензий на эту программу нет, ибо делал я ее, по факту, не я. Она была создана по образу и подобию оригинального Objection.lol, однако не имеет ничего общего с исходным кодом самого сайта.
+This programm is completely free and you're free to make forks of it or anything you want! We welcome anybody that want to make funny Ace Attorney arguments with comfort!
 
-Все имена и персонажи франшизы Ace Attorney принадлежат компании CAPCOM©. Это фанатский проект, никак не связанный с самим CAPCOM©.
+This programm is not licensed, because 99% of it was made via vibecoding. Also it was made in the image and likeness of the Objection.lol, but does not have anything in common regarding the source code.
+
+All respective names and characters of Ace Attorney franchise belong to CAPCOM©. This is a fan project and it's not affiliated with the CAPCOM. 
 
 
-** - эта программа была на 100% сделана нейросетью в виду крайне скудного знания автором языков программирования и неимения времени изучать программирование как таковое.
+
+(Russian/Русский)
+
+P.O.L. или Portative Objection.lol — это фанатская портативная версия сайта Objection.lol, работающая как приложение для ПК и Android.
+
+Эта программа обладает всем функционалом Objection.lol и даже имеет больше крутых фишек, чем оригинальный сайт!
+
+Например:
+- Быстрый экспорт.
+- Различные типы эффектов и фильтров для видео.
+- Возможность загрузки всех ресурсов из вашей библиотеки на Objection.lol.
+- Соотношение сторон 9:16.
+- И многое-многое другое!
+
+Эта программа полностью бесплатна, и вы можете создавать её форки или что угодно ещё! Мы приветствуем всех, кто хочет с комфортом создавать забавные споры в стиле Ace Attorney!
+
+Эта программа не лицензирована, так как 99% её создано с помощью vibecoding. Также она создана по образу и подобию Objection.lol, но не имеет ничего общего с ним в отношении исходного кода.
+
+Все имена и персонажи франшизы Ace Attorney принадлежат CAPCOM©. Это фанатский проект, не связанный с CAPCOM.
